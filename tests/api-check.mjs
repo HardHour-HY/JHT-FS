@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+const base=process.env.TEST_BASE_URL||'http://localhost:3000';
+if(!base.startsWith('http://localhost:')&&!base.startsWith('http://127.0.0.1:'))throw new Error('Integration check is restricted to local preview.');
+const get=async()=>{const r=await fetch(base+'/api/workspace');assert.equal(r.status,200);return r.json();};
+const put=async(state,version)=>fetch(base+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json',Origin:base},body:JSON.stringify({state,version})});
+let current=await get();
+const id='api-test-'+Date.now();
+const product={id,code:id.replaceAll('-',''),name:'自动校验临时商品',mode:'测试模式',category:'测试',subcategory:'临时',image:'',note:'中'.repeat(60),paths:[{source:{kind:'manual',value:'D:\\测试',aliasId:''},target:{kind:'manual',value:'E:\\测试',aliasId:''}}]};
+const next={...current.state,products:[...current.state.products,product]};
+const saved=await put(next,current.version);assert.equal(saved.status,200);
+const stale=await put(current.state,current.version);assert.equal(stale.status,409);
+const after=await get();assert(after.state.products.some(p=>p.id===id));
+const invalid={...after.state,products:after.state.products.map(p=>p.id===id?{...p,note:'中'.repeat(61)}:p)};
+const rejected=await put(invalid,after.version);assert.equal(rejected.status,400);
+const cross=await fetch(base+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json',Origin:'https://other.example'},body:JSON.stringify({state:after.state,version:after.version})});assert.equal(cross.status,403);
+const latest=await get();const cleanup=await put({...latest.state,products:latest.state.products.filter(p=>p.id!==id)},latest.version);assert.equal(cleanup.status,200);
+const final=await get();assert(!final.state.products.some(p=>p.id===id));
+console.log(JSON.stringify({persisted:true,conflictRejected:true,invalidNotesRejected:true,crossOriginRejected:true,temporaryProductRemoved:true,batches:final.state.batches.length,skus:final.state.batches[0]?.rows.length,total:final.state.batches[0]?.rows.reduce((n,r)=>n+r.quantity,0)}));
