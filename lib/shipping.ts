@@ -18,6 +18,9 @@ export function transformSku(sku: string, rule?: SkuRule) {
   if (!base) throw new Error(`SKU ${sku} 删除的末尾分段过多`);
   return base + rule.append;
 }
+export function applyPathsToProducts(products: Product[], selectedIds: Set<string>, paths: PathPair[]) {
+  return products.map(product => selectedIds.has(product.id) ? { ...product, paths: structuredClone(paths) } : product);
+}
 export function resolvePath(value: PathValue, aliases: Alias[]): string {
   if (value.kind === 'manual') return value.value.trim();
   const alias = aliases.find(a => a.id === value.aliasId);
