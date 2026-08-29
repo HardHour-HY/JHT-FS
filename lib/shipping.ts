@@ -1,5 +1,6 @@
 export type PathValue = { kind: 'manual' | 'alias'; value: string; aliasId: string };
-export type PathPair = { source: PathValue; target: PathValue };
+export type SkuRule = { enabled: boolean; dropSegments: number; append: string };
+export type PathPair = { source: PathValue; target: PathValue; skuRule?: SkuRule };
 export type Product = { id: string; code: string; name: string; mode: string; category: string; subcategory: string; image: string; note: string; paths: PathPair[] };
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
@@ -7,8 +8,16 @@ export type Batch = { id: string; name: string; createdAt: string; sourceRows: n
 export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[] };
 export const emptyState: AppState = { products: [], aliases: [], batches: [] };
 export const blankPath = (): PathValue => ({ kind: 'manual', value: '', aliasId: '' });
-export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', category: '', subcategory: '', image: '', note: '', paths: [{ source: blankPath(), target: blankPath() }] });
+export const blankSkuRule = (): SkuRule => ({ enabled: false, dropSegments: 0, append: '' });
+export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', category: '', subcategory: '', image: '', note: '', paths: [{ source: blankPath(), target: blankPath(), skuRule: blankSkuRule() }] });
 export function productCode(sku: string) { return sku.split('-')[0]; }
+export function transformSku(sku: string, rule?: SkuRule) {
+  if (!rule?.enabled) return sku;
+  const parts = sku.split('-');
+  const base = rule.dropSegments ? parts.slice(0, -rule.dropSegments).join('-') : sku;
+  if (!base) throw new Error(`SKU ${sku} 删除的末尾分段过多`);
+  return base + rule.append;
+}
 export function resolvePath(value: PathValue, aliases: Alias[]): string {
   if (value.kind === 'manual') return value.value.trim();
   const alias = aliases.find(a => a.id === value.aliasId);
@@ -65,7 +74,7 @@ export function copyRows(rows: Shipment[], state: AppState): (string | number)[]
     for (const pair of product.paths) {
       const source = resolvePath(pair.source, state.aliases), target = resolvePath(pair.target, state.aliases);
       if (!source || !target) throw new Error(`${product.code} 的路径尚未填写完整`);
-      result.push([source, row.sku, target, row.quantity]);
+      result.push([source, transformSku(row.sku, pair.skuRule), target, row.quantity]);
     }
   }
   return result;
@@ -95,10 +104,17 @@ export function validateState(state: AppState): void {
     textField(p.mode, '产品模式', 60); textField(p.category, '一级分类', 60); textField(p.subcategory, '二级分类', 60); textField(p.note, '备注', 60, false); textField(p.image, '图片链接', 2000, false);
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
     if (!Array.isArray(p.paths) || !p.paths.length || p.paths.length > 50) throw new Error('每个商品须有1至50组对应路径');
-    for (const pair of p.paths) for (const path of [pair.source, pair.target]) {
-      if (!path || !['manual', 'alias'].includes(path.kind)) throw new Error('路径格式无效');
-      textField(path.value, '路径', 2000, false); textField(path.aliasId, '路径引用', 100, false);
-      if (!resolvePath(path, state.aliases)) throw new Error('源文件夹和目标文件夹均不能为空');
+    for (const pair of p.paths) {
+      for (const path of [pair.source, pair.target]) {
+        if (!path || !['manual', 'alias'].includes(path.kind)) throw new Error('路径格式无效');
+        textField(path.value, '路径', 2000, false); textField(path.aliasId, '路径引用', 100, false);
+        if (!resolvePath(path, state.aliases)) throw new Error('源文件夹和目标文件夹均不能为空');
+      }
+      if (pair.skuRule) {
+        if (typeof pair.skuRule.enabled !== 'boolean' || !Number.isSafeInteger(pair.skuRule.dropSegments) || pair.skuRule.dropSegments < 0 || pair.skuRule.dropSegments > 20) throw new Error('SKU删除末尾段数须为0至20的整数');
+        textField(pair.skuRule.append, 'SKU追加文字', 100, false);
+        if (/[<>:"/\\|?*]/.test(pair.skuRule.append)) throw new Error('SKU追加文字不能包含 Windows 文件名禁用字符');
+      }
     }
   }
   for (const b of state.batches) {

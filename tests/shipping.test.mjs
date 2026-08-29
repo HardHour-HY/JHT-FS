@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { readFileSync } from 'node:fs';
 registerHooks({resolve(specifier, context, nextResolve) {try{return nextResolve(specifier,context);}catch(error){if(specifier.startsWith('.')&&!/\.[a-z]+$/.test(specifier))return nextResolve(specifier+'.ts',context);throw error;}}});
-const {aggregate,productCode,resolvePath,summarize,copyRows,toCsv,validateState,blankProduct}=await import('../lib/shipping.ts');
+const {aggregate,productCode,resolvePath,summarize,copyRows,toCsv,validateState,blankProduct,transformSku}=await import('../lib/shipping.ts');
 const {readFile,parseCsv,exportSummary,encodeGbkCsv}=await import('../lib/workbook.ts');
 const {parseProducts,detectProductHeader}=await import('../lib/product-import.ts');
 const ExcelJS=(await import('exceljs')).default;
@@ -25,3 +25,7 @@ test('CSV payload is plain UTF-8 text, not XLS or XLSX bytes',()=>{const csv=toC
 
 test('BAT-compatible CSV uses GBK bytes without UTF BOM or workbook signatures',async()=>{const csv=toCsv([['源文件夹','文件名','目标文件夹','复制数量'],['D:\\中文源','A001-x','E:\\中文目标',2]]);const bytes=await encodeGbkCsv(csv);assert.notDeepEqual(Array.from(bytes.slice(0,3)),[0xef,0xbb,0xbf]);assert.notDeepEqual(Array.from(bytes.slice(0,4)),[0xd0,0xcf,0x11,0xe0]);assert.notDeepEqual(Array.from(bytes.slice(0,2)),[0x50,0x4b]);const decoded=new TextDecoder('gbk').decode(bytes);assert.match(decoded,/中文源/);assert.match(decoded,/复制数量/);});
 test('GBK CSV rejects characters BAT code page 936 cannot preserve',async()=>{await assert.rejects(()=>encodeGbkCsv(toCsv([['路径'],['D:\\📦']])),/GBK 无法表示/);});
+
+test('each path independently transforms the SKU filename',()=>{const cover={enabled:true,dropSegments:1,append:'-F'};const inside={enabled:true,dropSegments:1,append:''};assert.equal(transformSku('QFBKQS30-1000-1PC',cover),'QFBKQS30-1000-F');assert.equal(transformSku('QFBKQS30-1000-1PC',inside),'QFBKQS30-1000');assert.equal(transformSku('QFBKQS30-1000-1PC',{enabled:false,dropSegments:1,append:'-F'}),'QFBKQS30-1000-1PC');const product={...p,paths:[{...p.paths[0],skuRule:cover},{...p.paths[1],skuRule:inside}]};assert.deepEqual(copyRows([{sku:'001-1000-1PC',quantity:3}],{...state,products:[product]}).map(row=>row[1]),['001-1000-F','001-1000']);});
+test('SKU transform validation rejects over-removal and invalid filename suffix',()=>{assert.throws(()=>transformSku('A-B',{enabled:true,dropSegments:2,append:''}),/过多/);assert.throws(()=>validateState({...state,products:[{...p,paths:[{...p.paths[0],skuRule:{enabled:true,dropSegments:1,append:'/F'}}]}]}),/禁用字符/);});
+test('bulk product import accepts optional per-path SKU rules',()=>{const headers=['产品图片','产品货号','产品模式','产品名称','一级分类','二级分类','源路径填写方式','源路径或剩余路径','源通用名称','目标路径填写方式','目标路径或剩余路径','目标通用名称','SKU处理','删除末尾段数','追加文字','备注'];const row=['','A001','模式A','笔记本','纸质类','笔记本','完整','D:\\封面','','完整','E:\\发货','','是','1','-F',''];const result=parseProducts([headers,row],0,[],[],()=> 'id');assert.deepEqual(result.issues,[]);assert.deepEqual(result.products[0].paths[0].skuRule,{enabled:true,dropSegments:1,append:'-F'});});
