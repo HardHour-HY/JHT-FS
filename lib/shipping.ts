@@ -1,7 +1,8 @@
 export type PathValue = { kind: 'manual' | 'alias'; value: string; aliasId: string };
 export type SkuRule = { enabled: boolean; dropSegments: number; append: string };
 export type PathPair = { source: PathValue; target: PathValue; skuRule?: SkuRule };
-export type Product = { id: string; code: string; name: string; mode: string; category: string; subcategory: string; image: string; note: string; paths: PathPair[] };
+export type LayoutType = '设计排版' | '非设计排版';
+export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; subcategory: string; image: string; note: string; paths: PathPair[] };
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
 export type Batch = { id: string; name: string; createdAt: string; sourceRows: number; rows: Shipment[] };
@@ -9,7 +10,7 @@ export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]
 export const emptyState: AppState = { products: [], aliases: [], batches: [] };
 export const blankPath = (): PathValue => ({ kind: 'manual', value: '', aliasId: '' });
 export const blankSkuRule = (): SkuRule => ({ enabled: false, dropSegments: 0, append: '' });
-export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', category: '', subcategory: '', image: '', note: '', paths: [{ source: blankPath(), target: blankPath(), skuRule: blankSkuRule() }] });
+export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', subcategory: '', image: '', note: '', paths: [{ source: blankPath(), target: blankPath(), skuRule: blankSkuRule() }] });
 export function productCode(sku: string) { return sku.split('-')[0]; }
 export function transformSku(sku: string, rule?: SkuRule) {
   if (!rule?.enabled) return sku;
@@ -98,13 +99,13 @@ export function validateState(state: AppState): void {
   if (state.products.length > 10000 || state.aliases.length > 500 || state.batches.length > 30) throw new Error('超过保存上限（商品10000、路径500、批次30）');
   const unique = (values: string[], name: string) => { if (new Set(values).size !== values.length) throw new Error(`${name}不能重复`); };
   unique(state.aliases.map(a => a.id), '路径ID'); unique(state.aliases.map(a => a.name.trim()), '路径名称');
-  unique(state.products.map(p => p.id), '商品ID'); unique(state.products.map(p => p.code.trim()), '产品货号');
+  unique(state.products.map(p => p.id), '商品ID'); unique(state.products.map(p => p.code.trim()), '产品货号'); unique(state.products.map(p => p.name.trim()), '产品名称');
   unique(state.batches.map(b => b.id), '批次ID');
   for (const a of state.aliases) { textField(a.id, '路径ID', 100); textField(a.name, '路径名称', 60); textField(a.path, '实际路径', 2000); }
   for (const p of state.products) {
     textField(p.id, '商品ID', 100); textField(p.code, '产品货号', 150); textField(p.name, '产品名称', 200);
     if (p.code.includes('-') || p.code !== p.code.trim()) throw new Error('产品货号应为 SKU 第一个 - 前的内容，不能包含 - 或首尾空格');
-    textField(p.mode, '产品模式', 60); textField(p.category, '一级分类', 60); textField(p.subcategory, '二级分类', 60); textField(p.note, '备注', 60, false); textField(p.image, '图片链接', 2000, false);
+    textField(p.mode, '产品模式', 60); if (p.layoutType !== undefined && !['设计排版','非设计排版'].includes(p.layoutType)) throw new Error('排版分类只能选择设计排版或非设计排版'); textField(p.category, '一级分类', 60); textField(p.subcategory, '二级分类', 60); textField(p.note, '备注', 60, false); textField(p.image, '图片链接', 2000, false);
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
     if (!Array.isArray(p.paths) || !p.paths.length || p.paths.length > 50) throw new Error('每个商品须有1至50组对应路径');
     for (const pair of p.paths) {
