@@ -24,23 +24,14 @@ export async function readFile(file: File): Promise<SheetData[]> {
     return [{ name: 'CSV', rows: parseCsv(decoded) }];
   }
   if (!/\.xlsx$/i.test(file.name)) throw new Error('请选择 .xlsx 或 .csv 文件；旧版 .xls 请先另存为 .xlsx');
-  const ExcelJS = (await import('exceljs')).default;
-  const book = new ExcelJS.Workbook();
-  await book.xlsx.load(await file.arrayBuffer());
-  return book.worksheets.map(sheet => {
-    if (sheet.rowCount > 20001 || sheet.columnCount > 300) throw new Error('单个工作表最多支持 20000 行明细、300 列');
-    const rows: string[][] = [];
-    sheet.eachRow({ includeEmpty: true }, row => {
-      const values: string[] = [];
-      for (let i = 1; i <= Math.max(sheet.columnCount, row.cellCount); i++) {
-        const cell = row.getCell(i);
-        if (cell.type === ExcelJS.ValueType.Formula) { values.push('【公式单元格，请先转为值】'); continue; }
-        if (typeof cell.value === 'number' && /^0+$/.test(cell.numFmt)) values.push(String(cell.value).padStart(cell.numFmt.length, '0'));
-        else values.push(cell.text || '');
-      }
-      rows.push(values);
-    });
-    return { name: sheet.name, rows };
+  // The universal build avoids downloading and starting a Worker for small
+  // operational spreadsheets. Parsing remains asynchronous at the call site.
+  const { default: readWorkbook } = await import('read-excel-file/universal');
+  const sheets = await readWorkbook(await file.arrayBuffer());
+  return sheets.map(({ sheet, data }) => {
+    if (data.length > 20001 || data.some(row => row.length > 300)) throw new Error('单个工作表最多支持 20000 行明细、300 列');
+    const rows = data.map(row => row.map(value => value instanceof Date ? value.toISOString().slice(0, 10) : value === null ? '' : String(value)));
+    return { name: sheet, rows };
   });
 }
 export function detectColumns(rows: string[][]) {
@@ -50,9 +41,37 @@ export function detectColumns(rows: string[][]) {
   return { headerRow, skuColumn: headers.findIndex(v => ['SKU货号', 'SKU', 'sku'].includes(v.trim())), quantityColumn: headers.findIndex(v => ['发货数', '发货数量', '数量'].includes(v.trim())) };
 }
 export function download(content: BlobPart, name: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
+  const url = URL.createObjectURL(new File([content], name, { type }));
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+export function downloadCsv(content: string, name: string) {
+  if (!name.toLowerCase().endsWith('.csv')) name += '.csv';
+  download(content, name, 'text/csv;charset=utf-8');
+}
+export async function exportProductTemplate() {
+  const ExcelJS = (await import('exceljs')).default;
+  const book = new ExcelJS.Workbook();
+  const sheet = book.addWorksheet('商品资料导入');
+  const headers = ['产品图片','产品货号','产品模式','产品名称','一级分类','二级分类','源路径填写方式','源路径或剩余路径','源通用名称','目标路径填写方式','目标路径或剩余路径','目标通用名称','备注'];
+  sheet.addRow(headers);
+  sheet.columns = headers.map((header, index) => ({ header, key: String(index), width: index === 0 ? 32 : index >= 6 && index <= 11 ? 22 : 16 }));
+  sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF276447' } };
+  sheet.getRow(1).height = 28; sheet.views = [{ state: 'frozen', ySplit: 1 }]; sheet.autoFilter = 'A1:M1';
+  ['B','I','L'].forEach(column => sheet.getColumn(column).numFmt = '@');
+  const guide = book.addWorksheet('填写说明');
+  guide.addRows([
+    ['填写说明','内容'],
+    ['一件商品多组路径','每组路径填写一行，并重复填写相同的产品货号和商品资料。'],
+    ['路径填写方式','填写“完整”或“通用”。完整：路径列填写完整路径；通用：路径列填写剩余路径，同时填写已建立的通用名称。'],
+    ['已有产品货号','导入会更新商品资料，并用表格中的路径替换该商品现有的全部路径。'],
+    ['必填字段','产品货号、产品模式、产品名称、一级分类、二级分类、源路径填写方式、源路径或通用名称、目标路径填写方式、目标路径或通用名称。'],
+    ['备注','最多60个中文字符。图片必须是 http 或 https 网络地址。'],
+  ]);
+  guide.columns = [{width:22},{width:95}]; guide.getRow(1).font = {bold:true,color:{argb:'FFFFFFFF'}}; guide.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF276447'}};
+  guide.eachRow(row=>{row.alignment={vertical:'top',wrapText:true};});
+  download(await book.xlsx.writeBuffer() as BlobPart, '商品资料批量导入模板.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 }
 export async function exportSummary(batch: Batch, products: Product[]) {
   const ExcelJS = (await import('exceljs')).default;
