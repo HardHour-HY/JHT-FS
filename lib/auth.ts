@@ -1,0 +1,19 @@
+import { database } from './database';
+
+export type SessionUser={id:string;username:string;isAdmin:boolean};
+const enc=new TextEncoder();
+const b64=(bytes:Uint8Array)=>btoa(String.fromCharCode(...bytes));
+const unb64=(value:string)=>Uint8Array.from(atob(value),c=>c.charCodeAt(0));
+const random=(size=32)=>{const value=new Uint8Array(size);crypto.getRandomValues(value);return value;};
+async function digest(value:string){return b64(new Uint8Array(await crypto.subtle.digest('SHA-256',enc.encode(value))));}
+export async function hashPassword(password:string,salt=random(16)){const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:210000},key,256);return {salt:b64(salt),hash:b64(new Uint8Array(bits))};}
+export async function verifyPassword(password:string,salt:string,expected:string){const actual=await hashPassword(password,unb64(salt));if(actual.hash.length!==expected.length)return false;let diff=0;for(let i=0;i<expected.length;i++)diff|=actual.hash.charCodeAt(i)^expected.charCodeAt(i);return diff===0;}
+export async function ensureAuthTables(){const db=await database();await db.prepare('CREATE TABLE IF NOT EXISTS app_users (id TEXT PRIMARY KEY,username TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,password_salt TEXT NOT NULL,is_admin INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL)').run();await db.prepare('CREATE TABLE IF NOT EXISTS app_sessions (token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL)').run();return db;}
+export function validateUsername(value:unknown){const username=String(value??'').trim();if(!/^[A-Za-z0-9_]{3,32}$/.test(username))throw new Error('账号须为3至32位字母、数字或下划线');return username;}
+export function validatePassword(value:unknown){const password=String(value??'');if(password.length<10||password.length>128)throw new Error('密码须为10至128个字符');return password;}
+export async function currentUser(request:Request):Promise<SessionUser|null>{const token=(request.headers.get('cookie')||'').match(/(?:^|;\s*)shipment_session=([^;]+)/)?.[1];if(!token)return null;const db=await ensureAuthTables();const row=await db.prepare('SELECT u.id,u.username,u.is_admin FROM app_sessions s JOIN app_users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.active=1').bind(await digest(decodeURIComponent(token)),new Date().toISOString()).first<{id:string;username:string;is_admin:number}>();return row?{id:row.id,username:row.username,isAdmin:row.is_admin===1}:null;}
+export async function requireUser(request:Request){const user=await currentUser(request);if(!user)throw new Error('UNAUTHORIZED');return user;}
+export async function createSession(userId:string){const db=await ensureAuthTables(),token=b64(random(32)).replace(/[+/=]/g,c=>({'+':'-','/':'_','=':''}[c]!)),now=new Date(),expires=new Date(now.getTime()+12*60*60*1000);await db.prepare('DELETE FROM app_sessions WHERE expires_at<=?').bind(now.toISOString()).run();await db.prepare('INSERT INTO app_sessions(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)').bind(await digest(token),userId,expires.toISOString(),now.toISOString()).run();return {token,expires};}
+export const sessionCookie=(token:string,expires:Date)=>`shipment_session=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Expires=${expires.toUTCString()}`;
+export const clearSessionCookie='shipment_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0';
+export async function tokenHashFromRequest(request:Request){const token=(request.headers.get('cookie')||'').match(/(?:^|;\s*)shipment_session=([^;]+)/)?.[1];return token?digest(decodeURIComponent(token)):null;}
