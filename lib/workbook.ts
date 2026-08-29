@@ -45,9 +45,22 @@ export function download(content: BlobPart, name: string, type: string) {
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-export function downloadCsv(content: string, name: string) {
+export async function encodeGbkCsv(content: string): Promise<Uint8Array<ArrayBuffer>> {
+  await import('@kayahr/text-encoding/encodings/gbk');
+  const { TextEncoder: LegacyTextEncoder } = await import('@kayahr/text-encoding/no-encodings');
+  const plain = content.replace(/^\uFEFF/, '');
+  let encoded: Uint8Array;
+  try { encoded = new LegacyTextEncoder('gbk').encode(plain); }
+  catch { throw new Error('CSV 中包含 GBK 无法表示的特殊字符，请修改商品路径或 SKU 后再导出'); }
+  const bytes = new Uint8Array(encoded.byteLength); bytes.set(encoded);
+  const roundTrip = new TextDecoder('gbk').decode(bytes);
+  if (roundTrip !== plain) throw new Error('CSV 中包含 GBK 无法表示的特殊字符，请修改商品路径或 SKU 后再导出');
+  return bytes;
+}
+export async function downloadCsv(content: string, name: string) {
   if (!name.toLowerCase().endsWith('.csv')) name += '.csv';
-  download(content, name, 'text/csv;charset=utf-8');
+  const bytes = await encodeGbkCsv(content);
+  download(bytes.buffer, name, 'text/csv;charset=gbk');
 }
 export async function exportProductTemplate() {
   const ExcelJS = (await import('exceljs')).default;
