@@ -4,7 +4,7 @@ import { registerHooks } from 'node:module';
 import { readFileSync } from 'node:fs';
 registerHooks({resolve(specifier, context, nextResolve) {try{return nextResolve(specifier,context);}catch(error){if(specifier.startsWith('.')&&!/\.[a-z]+$/.test(specifier))return nextResolve(specifier+'.ts',context);throw error;}}});
 const {aggregate,productCode,resolvePath,summarize,copyRows,toCsv,validateState,blankProduct,transformSku,applyPathsToProducts}=await import('../lib/shipping.ts');
-const {readFile,parseCsv,exportSummary,encodeGbkCsv}=await import('../lib/workbook.ts');
+const {readFile,parseCsv,exportSummary,exportModeSummary,encodeGbkCsv}=await import('../lib/workbook.ts');
 const {parseProducts,detectProductHeader}=await import('../lib/product-import.ts');
 const ExcelJS=(await import('exceljs')).default;
 const aliases=[{id:'root',name:'图库',path:'D:\\图库'},{id:'out',name:'目标',path:'E:\\发货'}];
@@ -39,6 +39,8 @@ test('bulk product import rejects a product name owned by another code',()=>{con
 test('product names are optional while non-empty names remain unique',()=>{const unnamed={...p,name:''},second={...p,id:'second',code:'002',name:''};validateState({...state,products:[unnamed,second]});assert.throws(()=>validateState({...state,products:[p,{...second,name:p.name}]}),/产品名称不能重复/);});
 
 test('design-layout products stay in totals but are omitted from CSV copy rows',()=>{const rows=[{sku:'001-A',quantity:3}];const design={...p,layoutType:'设计排版'};assert.equal(summarize(rows,[design]).total,3);assert.deepEqual(copyRows(rows,{...state,products:[design]}),[]);assert(copyRows(rows,{...state,products:[{...design,layoutType:'非设计排版'}]}).length>0);});
+
+test('mode summary workbook groups warehouse quantities and distinct shop packages',async()=>{let saved;const oldCreate=URL.createObjectURL;URL.createObjectURL=blob=>{saved=blob;return 'blob:test';};globalThis.document={createElement:()=>({click(){}})};try{await exportModeSummary({id:'b',name:'orders.xlsx',createdAt:'2026-08-30',sourceRows:2,rows:[{sku:'001-A',quantity:2},{sku:'001-B',quantity:3}],details:[{sku:'001-A',quantity:2,warehouse:'仓库一',shop:'店铺一',packageNo:'P1'},{sku:'001-B',quantity:3,warehouse:'仓库一',shop:'店铺一',packageNo:'P1'}]},[p]);const book=new ExcelJS.Workbook();await book.xlsx.load(await saved.arrayBuffer());const sheet=book.getWorksheet('汇总');assert.equal(sheet.getCell('A1').value,'模式A收货仓库');assert.equal(sheet.getCell('B2').value,5);assert.equal(sheet.getCell('D1').value,'模式A店铺');assert.equal(sheet.getCell('E2').value,1);}finally{URL.createObjectURL=oldCreate;delete globalThis.document;}});
 
 
 
