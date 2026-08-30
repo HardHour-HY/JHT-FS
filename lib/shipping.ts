@@ -74,6 +74,7 @@ export function copyRows(rows: Shipment[], state: AppState): (string | number)[]
   for (const row of rows) {
     const product = lookup.get(productCode(row.sku));
     if (!product) throw new Error(`请先建立产品信息：${productCode(row.sku)}`);
+    if (product.layoutType === '设计排版') continue;
     if (!product.paths.length) throw new Error(`${product.code} 尚未配置路径`);
     for (const pair of product.paths) {
       const source = resolvePath(pair.source, state.aliases), target = resolvePath(pair.target, state.aliases);

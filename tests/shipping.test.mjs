@@ -8,7 +8,7 @@ const {readFile,parseCsv,exportSummary,encodeGbkCsv}=await import('../lib/workbo
 const {parseProducts,detectProductHeader}=await import('../lib/product-import.ts');
 const ExcelJS=(await import('exceljs')).default;
 const aliases=[{id:'root',name:'图库',path:'D:\\图库'},{id:'out',name:'目标',path:'E:\\发货'}];
-const p={...blankProduct('001'),name:'挂历',mode:'模式A',layoutType:'设计排版',category:'纸质类',subcategory:'挂历',note:'中'.repeat(60),paths:[{source:{kind:'alias',aliasId:'root',value:'挂历'},target:{kind:'alias',aliasId:'out',value:'纸质'}},{source:{kind:'manual',aliasId:'',value:'F:\\另一处'},target:{kind:'manual',aliasId:'',value:'G:\\发货'}}]};
+const p={...blankProduct('001'),name:'挂历',mode:'模式A',layoutType:'非设计排版',category:'纸质类',subcategory:'挂历',note:'中'.repeat(60),paths:[{source:{kind:'alias',aliasId:'root',value:'挂历'},target:{kind:'alias',aliasId:'out',value:'纸质'}},{source:{kind:'manual',aliasId:'',value:'F:\\另一处'},target:{kind:'manual',aliasId:'',value:'G:\\发货'}}]};
 const state={products:[p],aliases,batches:[]};
 test('aggregate exact SKU, keep variants separate and leading zeros',()=>{const result=aggregate([['SKU','数量'],['001-A','2'],['001-A','3'],['001-B',4],[],['002',1]],0,1,0);assert.deepEqual(result.rows,[{sku:'001-A',quantity:5},{sku:'001-B',quantity:4},{sku:'002',quantity:1}]);assert.equal(result.sourceRows,4);assert.equal(result.issues.length,0);assert.equal(productCode('001-A-B'),'001');assert.equal(productCode('002'),'002');});
 test('bad rows block import and report original lines',()=>{const result=aggregate([['SKU','数量'],['',1],['A',0],['B',-1],['C','2.5'],['D',''],['E','=1+2']],0,1,0);assert.equal(result.issues.length,6);assert.match(result.issues[0],/第 2 行/);assert.throws(()=>aggregate([],0,0,0));});
@@ -37,6 +37,9 @@ test('new products require one of the two layout categories',()=>{assert.throws(
 test('bulk product import rejects a product name owned by another code',()=>{const headers=['产品图片','产品货号','产品模式','产品名称','排版分类','产品分类','源路径填写方式','源路径或剩余路径','源通用名称','目标路径填写方式','目标路径或剩余路径','目标通用名称','备注'];const row=['','002','模式A','挂历','设计排版','纸质类','完整','D:\\源','','完整','E:\\目标','',''];const result=parseProducts([headers,row],0,[p],[],()=> 'id');assert(result.issues.some(x=>x.includes('已被货号 001 使用')));});
 
 test('product names are optional while non-empty names remain unique',()=>{const unnamed={...p,name:''},second={...p,id:'second',code:'002',name:''};validateState({...state,products:[unnamed,second]});assert.throws(()=>validateState({...state,products:[p,{...second,name:p.name}]}),/产品名称不能重复/);});
+
+test('design-layout products stay in totals but are omitted from CSV copy rows',()=>{const rows=[{sku:'001-A',quantity:3}];const design={...p,layoutType:'设计排版'};assert.equal(summarize(rows,[design]).total,3);assert.deepEqual(copyRows(rows,{...state,products:[design]}),[]);assert(copyRows(rows,{...state,products:[{...design,layoutType:'非设计排版'}]}).length>0);});
+
 
 
 
