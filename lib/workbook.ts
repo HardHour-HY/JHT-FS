@@ -62,17 +62,18 @@ export async function downloadCsv(content: string, name: string) {
   const bytes = await encodeGbkCsv(content);
   download(bytes.buffer, name, 'text/csv;charset=gbk');
 }
-export async function exportProductTemplate() {
+export async function exportProductTemplate(categories: string[] = []) {
   const ExcelJS = (await import('exceljs')).default;
   const book = new ExcelJS.Workbook();
   const sheet = book.addWorksheet('商品资料导入');
-  const headers = ['产品图片','产品货号','产品模式','产品名称','排版分类','一级分类','二级分类','源路径填写方式','源路径或剩余路径','源通用名称','目标路径填写方式','目标路径或剩余路径','目标通用名称','SKU处理','删除末尾段数','追加文字','备注'];
+  const headers = ['产品图片','产品货号','产品模式','产品名称','排版分类','产品分类','源路径填写方式','源路径或剩余路径','源通用名称','目标路径填写方式','目标路径或剩余路径','目标通用名称','SKU处理','删除末尾段数','追加文字','备注'];
   sheet.addRow(headers);
   sheet.columns = headers.map((header, index) => ({ header, key: String(index), width: index === 0 ? 32 : index >= 6 && index <= 11 ? 22 : 16 }));
   sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF276447' } };
-  sheet.getRow(1).height = 28; sheet.views = [{ state: 'frozen', ySplit: 1 }]; sheet.autoFilter = 'A1:Q1';
-  ['B','J','M'].forEach(column => sheet.getColumn(column).numFmt = '@');
+  sheet.getRow(1).height = 28; sheet.views = [{ state: 'frozen', ySplit: 1 }]; sheet.autoFilter = 'A1:P1';
+  ['B','I','L'].forEach(column => sheet.getColumn(column).numFmt = '@');
+  if(categories.length){const options=book.addWorksheet('产品分类选项',{state:'veryHidden'});categories.forEach(value=>options.addRow([value]));(sheet as any).dataValidations.add('F2:F10000',{type:'list',allowBlank:false,formulae:[`'产品分类选项'!$A$1:$A$${categories.length}`]});}
   const guide = book.addWorksheet('填写说明');
   guide.addRows([
     ['填写说明','内容'],
@@ -80,7 +81,7 @@ export async function exportProductTemplate() {
     ['路径填写方式','填写“完整”或“通用”。完整：路径列填写完整路径；通用：路径列填写剩余路径，同时填写已建立的通用名称。'],
     ['每条路径处理SKU','SKU处理填写“是”时生效。删除末尾段数按“-”分段；例如 QFBKQS30-1000-1PC 删除1段得到 QFBKQS30-1000，再追加 -F 得到 QFBKQS30-1000-F。不处理可留空。'],
     ['已有产品货号','导入会更新商品资料，并用表格中的路径替换该商品现有的全部路径。'],
-    ['必填字段','产品货号、产品模式、产品名称、排版分类、一级分类、二级分类、源路径填写方式、源路径或通用名称、目标路径填写方式、目标路径或通用名称。产品货号和产品名称都必须唯一。'],
+    ['必填字段','产品货号、产品模式、产品名称、排版分类、产品分类、源路径填写方式、源路径或通用名称、目标路径填写方式、目标路径或通用名称。产品货号和产品名称都必须唯一。'],
     ['排版分类','只能填写“设计排版”或“非设计排版”，必须二选一。'],
     ['备注','最多60个中文字符。图片必须是 http 或 https 网络地址。'],
   ]);

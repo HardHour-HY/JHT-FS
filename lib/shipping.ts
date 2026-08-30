@@ -6,8 +6,8 @@ export type Product = { id: string; code: string; name: string; mode: string; la
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
 export type Batch = { id: string; name: string; createdAt: string; sourceRows: number; rows: Shipment[] };
-export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[] };
-export const emptyState: AppState = { products: [], aliases: [], batches: [] };
+export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]; productCategories?: string[] };
+export const emptyState: AppState = { products: [], aliases: [], batches: [], productCategories: [] };
 export const blankPath = (): PathValue => ({ kind: 'manual', value: '', aliasId: '' });
 export const blankSkuRule = (): SkuRule => ({ enabled: false, dropSegments: 0, append: '' });
 export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', subcategory: '', image: '', note: '', paths: [{ source: blankPath(), target: blankPath(), skuRule: blankSkuRule() }] });
@@ -98,6 +98,7 @@ export function validateState(state: AppState): void {
   if (!state || !Array.isArray(state.products) || !Array.isArray(state.aliases) || !Array.isArray(state.batches)) throw new Error('数据格式无效');
   if (state.products.length > 10000 || state.aliases.length > 500 || state.batches.length > 30) throw new Error('超过保存上限（商品10000、路径500、批次30）');
   const unique = (values: string[], name: string) => { if (new Set(values).size !== values.length) throw new Error(`${name}不能重复`); };
+  if(state.productCategories!==undefined){if(!Array.isArray(state.productCategories)||state.productCategories.length>200)throw new Error('产品分类选项格式无效');unique(state.productCategories.map(c=>c.trim()),'产品分类选项');for(const c of state.productCategories)textField(c,'产品分类选项',60);}
   unique(state.aliases.map(a => a.id), '路径ID'); unique(state.aliases.map(a => a.name.trim()), '路径名称');
   unique(state.products.map(p => p.id), '商品ID'); unique(state.products.map(p => p.code.trim()), '产品货号'); unique(state.products.map(p => p.name.trim()), '产品名称');
   unique(state.batches.map(b => b.id), '批次ID');
@@ -105,7 +106,7 @@ export function validateState(state: AppState): void {
   for (const p of state.products) {
     textField(p.id, '商品ID', 100); textField(p.code, '产品货号', 150); textField(p.name, '产品名称', 200);
     if (p.code.includes('-') || p.code !== p.code.trim()) throw new Error('产品货号应为 SKU 第一个 - 前的内容，不能包含 - 或首尾空格');
-    textField(p.mode, '产品模式', 60); if (p.layoutType !== undefined && !['设计排版','非设计排版'].includes(p.layoutType)) throw new Error('排版分类只能选择设计排版或非设计排版'); textField(p.category, '一级分类', 60); textField(p.subcategory, '二级分类', 60); textField(p.note, '备注', 60, false); textField(p.image, '图片链接', 2000, false);
+    textField(p.mode, '产品模式', 60); if (p.layoutType !== undefined && !['设计排版','非设计排版'].includes(p.layoutType)) throw new Error('排版分类只能选择设计排版或非设计排版'); textField(p.category, '产品分类', 60); textField(p.subcategory, '旧版二级分类', 60, false); textField(p.note, '备注', 60, false); textField(p.image, '图片链接', 2000, false);
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
     if (!Array.isArray(p.paths) || !p.paths.length || p.paths.length > 50) throw new Error('每个商品须有1至50组对应路径');
     for (const pair of p.paths) {
