@@ -36,6 +36,8 @@ test('new products require one of the two layout categories',()=>{assert.throws(
 
 test('bulk product import rejects a product name owned by another code',()=>{const headers=['产品图片','产品货号','产品模式','产品名称','排版分类','产品分类','源路径填写方式','源路径或剩余路径','源通用名称','目标路径填写方式','目标路径或剩余路径','目标通用名称','备注'];const row=['','002','模式A','挂历','设计排版','纸质类','完整','D:\\源','','完整','E:\\目标','',''];const result=parseProducts([headers,row],0,[p],[],()=> 'id');assert(result.issues.some(x=>x.includes('已被货号 001 使用')));});
 
+test('product names are optional while non-empty names remain unique',()=>{const unnamed={...p,name:''},second={...p,id:'second',code:'002',name:''};validateState({...state,products:[unnamed,second]});assert.throws(()=>validateState({...state,products:[p,{...second,name:p.name}]}),/产品名称不能重复/);});
+
 
 
 

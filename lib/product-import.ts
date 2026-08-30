@@ -27,7 +27,7 @@ export function parseProducts(rows: string[][], headerRow: number, existing: Pro
     const line=headerRow+offset+2; sourceRows++;
     const code=get(row,'产品货号'), image=get(row,'产品图片'), productMode=get(row,'产品模式'), name=get(row,'产品名称'), layoutType=get(row,'排版分类'), category=get(row,'产品分类'), note=get(row,'备注');
     if(!code||code.includes('-'))issues.push(`第 ${line} 行：产品货号不能为空且不能包含 -`);
-    if(!productMode||!name||!category)issues.push(`第 ${line} 行：产品模式、名称和产品分类均为必填`);
+    if(!productMode||!category)issues.push(`第 ${line} 行：产品模式和产品分类均为必填`);
     if(!['设计排版','非设计排版'].includes(layoutType))issues.push(`第 ${line} 行：排版分类必须填写“设计排版”或“非设计排版”`);
     if(Array.from(note).length>60)issues.push(`第 ${line} 行：备注超过60个字符`);
     if(image){try{const url=new URL(image);if(!['http:','https:'].includes(url.protocol))throw new Error();}catch{issues.push(`第 ${line} 行：产品图片必须是 http 或 https 地址`);}}
@@ -52,7 +52,7 @@ export function parseProducts(rows: string[][], headerRow: number, existing: Pro
   });
   if(!sourceRows)issues.push('没有找到商品资料行');
   const products=Array.from(grouped.values(),g=>({...g.base,paths:g.paths}));
-  const owners=new Map(existing.map(p=>[p.name.trim(),p.code]));
-  for(const product of products){const owner=owners.get(product.name.trim());if(owner&&owner!==product.code)issues.push(`产品名称“${product.name}”已被货号 ${owner} 使用`);owners.set(product.name.trim(),product.code);}
+  const owners=new Map(existing.filter(p=>p.name.trim()).map(p=>[p.name.trim(),p.code]));
+  for(const product of products){if(!product.name.trim())continue;const owner=owners.get(product.name.trim());if(owner&&owner!==product.code)issues.push(`产品名称“${product.name}”已被货号 ${owner} 使用`);owners.set(product.name.trim(),product.code);}
   return {products,issues,sourceRows,newCount:products.filter(p=>!existingMap.has(p.code)).length,updateCount:products.filter(p=>existingMap.has(p.code)).length};
 }
