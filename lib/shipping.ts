@@ -6,8 +6,8 @@ export type Product = { id: string; code: string; name: string; mode: string; la
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
 export type Batch = { id: string; name: string; createdAt: string; sourceRows: number; rows: Shipment[] };
-export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]; productCategories?: string[] };
-export const emptyState: AppState = { products: [], aliases: [], batches: [], productCategories: [] };
+export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]; productCategories?: string[]; productModes?: string[] };
+export const emptyState: AppState = { products: [], aliases: [], batches: [], productCategories: [], productModes: [] };
 export const blankPath = (): PathValue => ({ kind: 'manual', value: '', aliasId: '' });
 export const blankSkuRule = (): SkuRule => ({ enabled: false, dropSegments: 0, append: '' });
 export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', subcategory: '', image: '', note: '', paths: [{ source: blankPath(), target: blankPath(), skuRule: blankSkuRule() }] });
@@ -99,6 +99,7 @@ export function validateState(state: AppState): void {
   if (state.products.length > 10000 || state.aliases.length > 500 || state.batches.length > 30) throw new Error('超过保存上限（商品10000、路径500、批次30）');
   const unique = (values: string[], name: string) => { if (new Set(values).size !== values.length) throw new Error(`${name}不能重复`); };
   if(state.productCategories!==undefined){if(!Array.isArray(state.productCategories)||state.productCategories.length>200)throw new Error('产品分类选项格式无效');unique(state.productCategories.map(c=>c.trim()),'产品分类选项');for(const c of state.productCategories)textField(c,'产品分类选项',60);}
+  if(state.productModes!==undefined){if(!Array.isArray(state.productModes)||state.productModes.length>200)throw new Error('产品模式选项格式无效');unique(state.productModes.map(c=>c.trim()),'产品模式选项');for(const c of state.productModes)textField(c,'产品模式选项',60);}
   unique(state.aliases.map(a => a.id), '路径ID'); unique(state.aliases.map(a => a.name.trim()), '路径名称');
   unique(state.products.map(p => p.id), '商品ID'); unique(state.products.map(p => p.code.trim()), '产品货号'); unique(state.products.map(p => p.name.trim()).filter(Boolean), '产品名称');
   unique(state.batches.map(b => b.id), '批次ID');

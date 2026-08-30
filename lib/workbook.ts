@@ -62,7 +62,7 @@ export async function downloadCsv(content: string, name: string) {
   const bytes = await encodeGbkCsv(content);
   download(bytes.buffer, name, 'text/csv;charset=gbk');
 }
-export async function exportProductTemplate(categories: string[] = []) {
+export async function exportProductTemplate(categories: string[] = [], modes: string[] = []) {
   const ExcelJS = (await import('exceljs')).default;
   const book = new ExcelJS.Workbook();
   const sheet = book.addWorksheet('商品资料导入');
@@ -74,6 +74,7 @@ export async function exportProductTemplate(categories: string[] = []) {
   sheet.getRow(1).height = 28; sheet.views = [{ state: 'frozen', ySplit: 1 }]; sheet.autoFilter = 'A1:P1';
   ['B','I','L'].forEach(column => sheet.getColumn(column).numFmt = '@');
   if(categories.length){const options=book.addWorksheet('产品分类选项',{state:'veryHidden'});categories.forEach(value=>options.addRow([value]));(sheet as any).dataValidations.add('F2:F10000',{type:'list',allowBlank:false,formulae:[`'产品分类选项'!$A$1:$A$${categories.length}`]});}
+  if(modes.length){const options=book.addWorksheet('产品模式选项',{state:'veryHidden'});modes.forEach(value=>options.addRow([value]));(sheet as any).dataValidations.add('C2:C10000',{type:'list',allowBlank:false,formulae:[`'产品模式选项'!$A$1:$A$${modes.length}`]});}
   const guide = book.addWorksheet('填写说明');
   guide.addRows([
     ['填写说明','内容'],
