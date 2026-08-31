@@ -126,7 +126,7 @@ export async function exportModeSummary(batch:Batch,products:Product[]){
     start+=height+4;
   }
   sheet.columns=[{width:28},{width:16},{width:4},{width:28},{width:16}];sheet.views=[{state:'frozen',ySplit:1}];
-  const paperSheet=book.addWorksheet('纸质产品'),paperDetails=batch.details.flatMap(row=>{const product=lookup.get(productCode(row.sku));return product?.category.includes('纸质')?[{row,product}]:[];}).sort((a,b)=>[a.product.category,a.row.warehouse,a.row.packageNo,a.row.sku].join('\u0000').localeCompare([b.product.category,b.row.warehouse,b.row.packageNo,b.row.sku].join('\u0000'),'zh-CN'));
+  const paperSheet=book.addWorksheet('纸质产品'),paperDetails=batch.details.flatMap(row=>{const product=lookup.get(productCode(row.sku));return product?.printRequired?[{row,product}]:[];}).sort((a,b)=>[a.product.category,a.row.warehouse,a.row.packageNo,a.row.sku].join('\u0000').localeCompare([b.product.category,b.row.warehouse,b.row.packageNo,b.row.sku].join('\u0000'),'zh-CN'));
   const table1Headers=['产品分类','收货仓库','包裹号','SKU货号','发货数'],table2Headers=['产品分类','产品货号','SKU货号','发货数'],table3Headers=['产品分类','收货仓库','发货数量','包裹数量'];
   const setHeaders=(column:number,headers:string[])=>headers.forEach((header,index)=>{const cell=paperSheet.getCell(1,column+index);cell.value=header;cell.font={bold:true,color:{argb:'FFFFFFFF'}};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF276447'}};});
   const setTotal=(row:number,column:number,values:(string|number)[])=>values.forEach((value,index)=>{const cell=paperSheet.getCell(row,column+index);cell.value=value;cell.font={bold:true};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F1EC'}};});
