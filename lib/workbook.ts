@@ -109,6 +109,19 @@ export async function exportModeSummary(batch:Batch,products:Product[]){
   const ExcelJS=(await import('exceljs')).default,book=new ExcelJS.Workbook(),sheet=book.addWorksheet('汇总'),lookup=new Map(products.map(p=>[p.code,p]));
   const warehouses=new Map<string,Map<string,number>>(),shops=new Map<string,Map<string,Set<string>>>();
   for(const row of batch.details){const product=lookup.get(productCode(row.sku));if(!product)throw new Error(`请先建立产品信息：${productCode(row.sku)}`);const mode=product.mode;let wm=warehouses.get(mode);if(!wm)warehouses.set(mode,wm=new Map());wm.set(row.warehouse,(wm.get(row.warehouse)||0)+row.quantity);let sm=shops.get(mode);if(!sm)shops.set(mode,sm=new Map());let packages=sm.get(row.shop);if(!packages)sm.set(row.shop,packages=new Set());packages.add(row.packageNo);}
-  let start=1;for(const mode of warehouses.keys()){const wm=warehouses.get(mode)!,sm=shops.get(mode)||new Map<string,Set<string>>(),height=Math.max(wm.size,sm.size,1);sheet.getCell(start,1).value=`${mode}收货仓库`;sheet.getCell(start,2).value=`${mode}发货数`;sheet.getCell(start,4).value=`${mode}店铺`;sheet.getCell(start,5).value=`${mode}包裹数量`;for(const cell of [sheet.getCell(start,1),sheet.getCell(start,2),sheet.getCell(start,4),sheet.getCell(start,5)]){cell.font={bold:true,color:{argb:'FFFFFFFF'}};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF276447'}};}[...wm].forEach(([name,total],i)=>{sheet.getCell(start+1+i,1).value=name;sheet.getCell(start+1+i,2).value=total;});[...sm].forEach(([name,set],i)=>{sheet.getCell(start+1+i,4).value=name;sheet.getCell(start+1+i,5).value=set.size;});start+=height+3;}
+  let start=1;
+  for(const mode of warehouses.keys()){
+    const wm=warehouses.get(mode)!,sm=shops.get(mode)||new Map<string,Set<string>>(),height=Math.max(wm.size,sm.size,1);
+    sheet.getCell(start,1).value=`${mode}收货仓库`;sheet.getCell(start,2).value=`${mode}发货数`;sheet.getCell(start,4).value=`${mode}店铺`;sheet.getCell(start,5).value=`${mode}包裹数量`;
+    for(const cell of [sheet.getCell(start,1),sheet.getCell(start,2),sheet.getCell(start,4),sheet.getCell(start,5)]){cell.font={bold:true,color:{argb:'FFFFFFFF'}};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF276447'}};}
+    [...wm].forEach(([name,total],i)=>{sheet.getCell(start+1+i,1).value=name;sheet.getCell(start+1+i,2).value=total;});
+    [...sm].forEach(([name,set],i)=>{sheet.getCell(start+1+i,4).value=name;sheet.getCell(start+1+i,5).value=set.size;});
+    const warehouseTotalRow=start+1+wm.size,shopTotalRow=start+1+sm.size;
+    sheet.getCell(warehouseTotalRow,1).value='合计';sheet.getCell(warehouseTotalRow,2).value=[...wm.values()].reduce((sum,value)=>sum+value,0);
+    const allPackages=new Set<string>();for(const set of sm.values())for(const packageNo of set)allPackages.add(packageNo);
+    sheet.getCell(shopTotalRow,4).value='合计';sheet.getCell(shopTotalRow,5).value=allPackages.size;
+    for(const cell of [sheet.getCell(warehouseTotalRow,1),sheet.getCell(warehouseTotalRow,2),sheet.getCell(shopTotalRow,4),sheet.getCell(shopTotalRow,5)]){cell.font={bold:true};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F1EC'}};}
+    start+=height+4;
+  }
   sheet.columns=[{width:28},{width:16},{width:4},{width:28},{width:16}];sheet.views=[{state:'frozen',ySplit:1}];download(await book.xlsx.writeBuffer() as BlobPart,`${batch.name.replace(/\.[^.]+$/,'')}-模式汇总.xlsx`,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 }
