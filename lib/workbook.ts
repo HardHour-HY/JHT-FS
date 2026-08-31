@@ -124,20 +124,24 @@ export async function exportModeSummary(batch:Batch,products:Product[]){
     start+=height+4;
   }
   sheet.columns=[{width:28},{width:16},{width:4},{width:28},{width:16}];sheet.views=[{state:'frozen',ySplit:1}];
-  const paperSheet=book.addWorksheet('纸质产品'),paperDetails=batch.details.flatMap(row=>{const product=lookup.get(productCode(row.sku));return product?.category.includes('纸质')?[{row,product}]:[];});
+  const paperSheet=book.addWorksheet('纸质产品'),paperDetails=batch.details.flatMap(row=>{const product=lookup.get(productCode(row.sku));return product?.category.includes('纸质')?[{row,product}]:[];}).sort((a,b)=>[a.product.category,a.row.warehouse,a.row.packageNo,a.row.sku].join('\u0000').localeCompare([b.product.category,b.row.warehouse,b.row.packageNo,b.row.sku].join('\u0000'),'zh-CN'));
   const table1Headers=['产品分类','收货仓库','包裹号','SKU货号','发货数'],table2Headers=['产品分类','产品货号','SKU货号','发货数'],table3Headers=['产品分类','收货仓库','发货数量','包裹数量'];
   const setHeaders=(column:number,headers:string[])=>headers.forEach((header,index)=>{const cell=paperSheet.getCell(1,column+index);cell.value=header;cell.font={bold:true,color:{argb:'FFFFFFFF'}};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF276447'}};});
   const setTotal=(row:number,column:number,values:(string|number)[])=>values.forEach((value,index)=>{const cell=paperSheet.getCell(row,column+index);cell.value=value;cell.font={bold:true};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F1EC'}};});
+  const mergeRepeated=(rows:(string|number)[][],startColumn:number,dimensionColumns:number)=>{for(let dimension=0;dimension<dimensionColumns;dimension++){let from=0;while(from<rows.length){let to=from+1;while(to<rows.length&&rows[to].slice(0,dimension+1).every((value,index)=>value===rows[from][index]))to++;if(to-from>1){paperSheet.mergeCells(from+2,startColumn+dimension,to+1,startColumn+dimension);paperSheet.getCell(from+2,startColumn+dimension).alignment={vertical:'middle'};}from=to;}}};
   setHeaders(1,table1Headers);setHeaders(7,table2Headers);setHeaders(12,table3Headers);
   paperDetails.forEach(({row,product},index)=>{const values=[product.category,row.warehouse,row.packageNo,row.sku,row.quantity];values.forEach((value,column)=>paperSheet.getCell(index+2,column+1).value=value);});
+  mergeRepeated(paperDetails.map(({row,product})=>[product.category,row.warehouse,row.packageNo,row.sku,row.quantity]),1,4);
   setTotal(paperDetails.length+2,1,['合计','','','',paperDetails.reduce((sum,item)=>sum+item.row.quantity,0)]);
   const skuTotals=new Map<string,{category:string;code:string;sku:string;quantity:number}>();
   for(const {row,product} of paperDetails){const key=`${product.category}\u0000${product.code}\u0000${row.sku}`,prior=skuTotals.get(key);if(prior)prior.quantity+=row.quantity;else skuTotals.set(key,{category:product.category,code:product.code,sku:row.sku,quantity:row.quantity});}
-  [...skuTotals.values()].forEach((item,index)=>[item.category,item.code,item.sku,item.quantity].forEach((value,column)=>paperSheet.getCell(index+2,column+7).value=value));
+  const skuRows=[...skuTotals.values()].sort((a,b)=>[a.category,a.code,a.sku].join('\u0000').localeCompare([b.category,b.code,b.sku].join('\u0000'),'zh-CN')).map(item=>[item.category,item.code,item.sku,item.quantity] as (string|number)[]);
+  skuRows.forEach((values,index)=>values.forEach((value,column)=>paperSheet.getCell(index+2,column+7).value=value));mergeRepeated(skuRows,7,3);
   setTotal(skuTotals.size+2,7,['合计','','',[...skuTotals.values()].reduce((sum,item)=>sum+item.quantity,0)]);
   const warehouseTotals=new Map<string,{category:string;warehouse:string;quantity:number;packages:Set<string>}>();
   for(const {row,product} of paperDetails){const key=`${product.category}\u0000${row.warehouse}`,prior=warehouseTotals.get(key);if(prior){prior.quantity+=row.quantity;prior.packages.add(row.packageNo);}else warehouseTotals.set(key,{category:product.category,warehouse:row.warehouse,quantity:row.quantity,packages:new Set([row.packageNo])});}
-  [...warehouseTotals.values()].forEach((item,index)=>[item.category,item.warehouse,item.quantity,item.packages.size].forEach((value,column)=>paperSheet.getCell(index+2,column+12).value=value));
+  const warehouseRows=[...warehouseTotals.values()].sort((a,b)=>[a.category,a.warehouse].join('\u0000').localeCompare([b.category,b.warehouse].join('\u0000'),'zh-CN')).map(item=>[item.category,item.warehouse,item.quantity,item.packages.size] as (string|number)[]);
+  warehouseRows.forEach((values,index)=>values.forEach((value,column)=>paperSheet.getCell(index+2,column+12).value=value));mergeRepeated(warehouseRows,12,2);
   const allPaperPackages=new Set(paperDetails.map(item=>item.row.packageNo));
   setTotal(warehouseTotals.size+2,12,['合计','',[...warehouseTotals.values()].reduce((sum,item)=>sum+item.quantity,0),allPaperPackages.size]);
   paperSheet.columns=[{width:20},{width:22},{width:24},{width:32},{width:14},{width:4},{width:20},{width:20},{width:32},{width:14},{width:4},{width:20},{width:22},{width:14},{width:14}];paperSheet.views=[{state:'frozen',ySplit:1}];
