@@ -39,7 +39,7 @@ export function detectColumns(rows: string[][]) {
   if (headerRow < 0) headerRow = 0;
   const headers = rows[headerRow] || [];
   const find=(names:string[])=>headers.findIndex(v=>names.includes(v.trim()));
-  return { headerRow, skuColumn: find(['SKU货号','SKU','sku']), quantityColumn: find(['发货数','发货数量','数量']), warehouseColumn:find(['收货仓库','仓库']),shopColumn:find(['店铺','店铺名称']),packageColumn:find(['包裹号','包裹编号']) };
+  return { headerRow, skuColumn: find(['SKU货号','SKU','sku']), quantityColumn: find(['发货数','发货数量','数量']), warehouseColumn:find(['收货仓库','仓库']),shopColumn:find(['店铺','店铺名称']),packageColumn:find(['包裹号','包裹编号']),customIdColumn:find(['定制ID','定制 Id','定制id','Custom ID','custom_id']) };
 }
 export function download(content: BlobPart, name: string, type: string) {
   const url = URL.createObjectURL(new File([content], name, { type }));
@@ -145,5 +145,20 @@ export async function exportModeSummary(batch:Batch,products:Product[]){
   const allPaperPackages=new Set(paperDetails.map(item=>item.row.packageNo));
   setTotal(warehouseTotals.size+2,12,['合计','',[...warehouseTotals.values()].reduce((sum,item)=>sum+item.quantity,0),allPaperPackages.size]);
   paperSheet.columns=[{width:20},{width:22},{width:24},{width:32},{width:14},{width:4},{width:20},{width:20},{width:32},{width:14},{width:4},{width:20},{width:22},{width:14},{width:14}];paperSheet.views=[{state:'frozen',ySplit:1}];
+  const calendarSheet=book.addWorksheet('定制挂历'),calendarDetails=batch.details.flatMap(row=>{const product=lookup.get(productCode(row.sku));return product?.category.includes('定制挂历')?[{row,product}]:[];}).sort((a,b)=>[a.product.category,a.row.warehouse,a.row.packageNo,a.row.sku,a.row.customId||''].join('\u0000').localeCompare([b.product.category,b.row.warehouse,b.row.packageNo,b.row.sku,b.row.customId||''].join('\u0000'),'zh-CN'));
+  if(calendarDetails.some(item=>!item.row.customId?.trim()))throw new Error('定制挂历商品缺少定制ID，请重新上传并选择“定制ID”列');
+  const calendarHeaders=(column:number,headers:string[])=>headers.forEach((header,index)=>{const cell=calendarSheet.getCell(1,column+index);cell.value=header;cell.font={bold:true,color:{argb:'FFFFFFFF'}};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF276447'}};});
+  const calendarTotal=(row:number,column:number,values:(string|number)[])=>values.forEach((value,index)=>{const cell=calendarSheet.getCell(row,column+index);cell.value=value;cell.font={bold:true};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F1EC'}};});
+  const mergeCalendar=(rows:(string|number)[][],startColumn:number,dimensionColumns:number)=>{for(let dimension=0;dimension<dimensionColumns;dimension++){let from=0;while(from<rows.length){let to=from+1;while(to<rows.length&&rows[to].slice(0,dimension+1).every((value,index)=>value===rows[from][index]))to++;if(to-from>1){calendarSheet.mergeCells(from+2,startColumn+dimension,to+1,startColumn+dimension);calendarSheet.getCell(from+2,startColumn+dimension).alignment={vertical:'middle'};}from=to;}}};
+  calendarHeaders(1,['产品分类','收货仓库','包裹号','SKU货号','定制ID','发货数量']);calendarHeaders(8,['产品分类','收货仓库','发货数量','包裹数量']);
+  const calendarRows=calendarDetails.map(({row,product})=>[product.category,row.warehouse,row.packageNo,row.sku,row.customId||'',row.quantity] as (string|number)[]);
+  calendarRows.forEach((values,index)=>values.forEach((value,column)=>calendarSheet.getCell(index+2,column+1).value=value));mergeCalendar(calendarRows,1,5);
+  calendarTotal(calendarRows.length+2,1,['合计','','','','',calendarDetails.reduce((sum,item)=>sum+item.row.quantity,0)]);
+  const calendarWarehouseTotals=new Map<string,{category:string;warehouse:string;quantity:number;packages:Set<string>}>();
+  for(const {row,product} of calendarDetails){const key=`${product.category}\u0000${row.warehouse}`,prior=calendarWarehouseTotals.get(key);if(prior){prior.quantity+=row.quantity;prior.packages.add(row.packageNo);}else calendarWarehouseTotals.set(key,{category:product.category,warehouse:row.warehouse,quantity:row.quantity,packages:new Set([row.packageNo])});}
+  const calendarWarehouseRows=[...calendarWarehouseTotals.values()].sort((a,b)=>[a.category,a.warehouse].join('\u0000').localeCompare([b.category,b.warehouse].join('\u0000'),'zh-CN')).map(item=>[item.category,item.warehouse,item.quantity,item.packages.size] as (string|number)[]);
+  calendarWarehouseRows.forEach((values,index)=>values.forEach((value,column)=>calendarSheet.getCell(index+2,column+8).value=value));mergeCalendar(calendarWarehouseRows,8,2);
+  calendarTotal(calendarWarehouseRows.length+2,8,['合计','',calendarWarehouseRows.reduce((sum,row)=>sum+Number(row[2]),0),new Set(calendarDetails.map(item=>item.row.packageNo)).size]);
+  calendarSheet.columns=[{width:22},{width:22},{width:24},{width:32},{width:24},{width:14},{width:4},{width:22},{width:22},{width:14},{width:14}];calendarSheet.views=[{state:'frozen',ySplit:1}];
   download(await book.xlsx.writeBuffer() as BlobPart,`${batch.name.replace(/\.[^.]+$/,'')}-模式汇总.xlsx`,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 }
