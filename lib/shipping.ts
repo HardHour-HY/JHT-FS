@@ -123,7 +123,7 @@ export function validateState(state: AppState): void {
     if (p.code.includes('-') || p.code !== p.code.trim()) throw new Error('产品货号应为 SKU 第一个 - 前的内容，不能包含 - 或首尾空格');
     textField(p.mode, '产品模式', 60); if (p.layoutType !== undefined && !['设计排版','非设计排版'].includes(p.layoutType)) throw new Error('排版分类只能选择设计排版或非设计排版'); textField(p.category, '产品分类', 60); textField(p.subcategory, '旧版二级分类', 60, false); textField(p.note, '备注', 60, false); textField(p.image, '图片链接', 2000, false);
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
-    if (!Array.isArray(p.paths) || !p.paths.length || p.paths.length > 50) throw new Error('每个商品须有1至50组对应路径');
+    if (!Array.isArray(p.paths) || p.paths.length > 50 || (p.layoutType!=='设计排版'&&!p.paths.length)) throw new Error('非设计排版商品须有1至50组对应路径');
     for (const pair of p.paths) {
       for (const path of [pair.source, pair.target]) {
         if (!path || !['manual', 'alias'].includes(path.kind)) throw new Error('路径格式无效');
