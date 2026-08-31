@@ -38,7 +38,8 @@ export function parseProducts(rows: string[][], headerRow: number, existing: Pro
       if(kind==='manual'){if(!value)issues.push(`第 ${line} 行：${valueName}不能为空`);return {kind,value,aliasId:''};}
       const found=aliasMap.get(aliasLabel);if(!found)issues.push(`第 ${line} 行：找不到通用路径“${aliasLabel||'空'}”`);return {kind,value,aliasId:found?.id||''};
     };
-    const needsPaths=layoutType!=='设计排版';
+    const printRequired=printText?printText==='是':existingMap.get(code)?.printRequired??false;
+    const needsPaths=layoutType!=='设计排版'||printRequired;
     const source=needsPaths?makePath('源路径填写方式','源路径或剩余路径','源通用名称'):null,target=needsPaths?makePath('目标路径填写方式','目标路径或剩余路径','目标通用名称'):null;
     const ruleEnabled=index.has('SKU处理')&&['是','开启','yes','1'].includes(String(row[index.get('SKU处理')!]??'').trim().toLowerCase());
     const dropRaw=index.has('删除末尾段数')?String(row[index.get('删除末尾段数')!]??'').trim():'';
@@ -47,7 +48,7 @@ export function parseProducts(rows: string[][], headerRow: number, existing: Pro
     if(ruleEnabled&&/[<>:"/\\|?*]/.test(append))issues.push(`第 ${line} 行：追加文字包含 Windows 文件名禁用字符`);
     const skuRule:SkuRule={enabled:ruleEnabled,dropSegments:Number.isSafeInteger(dropSegments)?dropSegments:0,append};
     if(!code||(needsPaths&&(!source||!target)))return;
-    const old=existingMap.get(code); const base={id:old?.id||idFactory(),code,name,mode:productMode,layoutType:layoutType as Product['layoutType'],category,printRequired:printText?printText==='是':old?.printRequired??false,subcategory:old?.subcategory||'',image,note};
+    const old=existingMap.get(code); const base={id:old?.id||idFactory(),code,name,mode:productMode,layoutType:layoutType as Product['layoutType'],category,printRequired,subcategory:old?.subcategory||'',image,note};
     const prior=grouped.get(code);
     if(prior){const same=['name','mode','layoutType','category','printRequired','subcategory','image','note'].every(k=>prior.base[k as keyof typeof prior.base]===base[k as keyof typeof base]);if(!same)issues.push(`第 ${line} 行：产品 ${code} 的资料与第 ${prior.firstLine} 行不一致`);if(needsPaths)prior.paths.push({source:source!,target:target!,skuRule});}
     else grouped.set(code,{base,paths:needsPaths?[{source:source!,target:target!,skuRule}]:[],firstLine:line});

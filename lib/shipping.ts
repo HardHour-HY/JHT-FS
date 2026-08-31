@@ -25,7 +25,7 @@ export function applyPathsToProducts(products: Product[], selectedIds: Set<strin
 }
 export type ProductBatchPatch = { mode?: string; layoutType?: LayoutType; category?: string; printRequired?: boolean; paths?: PathPair[] };
 export function applyProductBatchPatch(products:Product[],selectedIds:Set<string>,patch:ProductBatchPatch){
-  return products.map(product=>{if(!selectedIds.has(product.id))return product;const next={...product,...patch,paths:patch.paths?structuredClone(patch.paths):product.paths};if(next.layoutType==='设计排版')next.paths=[];return next;});
+  return products.map(product=>{if(!selectedIds.has(product.id))return product;const next={...product,...patch,paths:patch.paths?structuredClone(patch.paths):product.paths};if(next.layoutType==='设计排版'&&!next.printRequired)next.paths=[];return next;});
 }
 export function resolvePath(value: PathValue, aliases: Alias[]): string {
   if (value.kind === 'manual') return value.value.trim();
@@ -91,7 +91,7 @@ export function copyRows(rows: Shipment[], state: AppState): (string | number)[]
   for (const row of rows) {
     const product = lookup.get(productCode(row.sku));
     if (!product) throw new Error(`请先建立产品信息：${productCode(row.sku)}`);
-    if (product.layoutType === '设计排版') continue;
+    if (product.layoutType === '设计排版' && !product.printRequired) continue;
     if (!product.paths.length) throw new Error(`${product.code} 尚未配置路径`);
     for (const pair of product.paths) {
       const source = resolvePath(pair.source, state.aliases), target = resolvePath(pair.target, state.aliases);
@@ -128,7 +128,7 @@ export function validateState(state: AppState): void {
     textField(p.mode, '产品模式', 60); if (p.layoutType !== undefined && !['设计排版','非设计排版'].includes(p.layoutType)) throw new Error('排版分类只能选择设计排版或非设计排版'); textField(p.category, '产品分类', 60); textField(p.subcategory, '旧版二级分类', 60, false); textField(p.note, '备注', 60, false); textField(p.image, '图片链接', 2000, false);
     if(p.printRequired!==undefined&&typeof p.printRequired!=='boolean')throw new Error('是否需要打印格式无效');
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
-    if (!Array.isArray(p.paths) || p.paths.length > 50 || (p.layoutType!=='设计排版'&&!p.paths.length)) throw new Error('非设计排版商品须有1至50组对应路径');
+    if (!Array.isArray(p.paths) || p.paths.length > 50 || ((p.layoutType!=='设计排版'||p.printRequired)&&!p.paths.length)) throw new Error('非设计排版或需要打印的商品须有1至50组对应路径');
     for (const pair of p.paths) {
       for (const path of [pair.source, pair.target]) {
         if (!path || !['manual', 'alias'].includes(path.kind)) throw new Error('路径格式无效');
