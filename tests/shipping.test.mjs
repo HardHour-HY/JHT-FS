@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { readFileSync } from 'node:fs';
 registerHooks({resolve(specifier, context, nextResolve) {try{return nextResolve(specifier,context);}catch(error){if(specifier.startsWith('.')&&!/\.[a-z]+$/.test(specifier))return nextResolve(specifier+'.ts',context);throw error;}}});
-const {aggregate,productCode,resolvePath,summarize,copyRows,toCsv,validateState,blankProduct,transformSku,applyPathsToProducts,extractShipmentDetails}=await import('../lib/shipping.ts');
+const {aggregate,productCode,resolvePath,summarize,copyRows,toCsv,validateState,blankProduct,transformSku,applyPathsToProducts,applyProductBatchPatch,extractShipmentDetails}=await import('../lib/shipping.ts');
 const {readFile,parseCsv,exportSummary,exportModeSummary,encodeGbkCsv,detectColumns}=await import('../lib/workbook.ts');
 const {parseProducts,detectProductHeader}=await import('../lib/product-import.ts');
 const ExcelJS=(await import('exceljs')).default;
@@ -31,6 +31,8 @@ test('SKU transform validation rejects over-removal and invalid filename suffix'
 test('bulk product import accepts optional per-path SKU rules',()=>{const headers=['产品图片','产品货号','产品模式','产品名称','排版分类','产品分类','源路径填写方式','源路径或剩余路径','源通用名称','目标路径填写方式','目标路径或剩余路径','目标通用名称','SKU处理','删除末尾段数','追加文字','备注'];const row=['','A001','模式A','笔记本','非设计排版','纸质类','完整','D:\\封面','','完整','E:\\发货','','是','1','-F',''];const result=parseProducts([headers,row],0,[],[],()=> 'id');assert.deepEqual(result.issues,[]);assert.deepEqual(result.products[0].paths[0].skuRule,{enabled:true,dropSegments:1,append:'-F'});});
 
 test('batch path editing changes only selected products and clones path arrays',()=>{const second={...p,id:'product-two',code:'002',name:'第二件'};const template=[{source:{kind:'manual',value:'D:\\批量源',aliasId:''},target:{kind:'manual',value:'E:\\批量目标',aliasId:''},skuRule:{enabled:true,dropSegments:1,append:'-F'}}];const result=applyPathsToProducts([p,second],new Set([p.id]),template);assert.deepEqual(result[0].paths,template);assert.notEqual(result[0].paths,template);assert.equal(result[1],second);assert.equal(result[0].name,p.name);result[0].paths[0].source.value='changed';assert.equal(template[0].source.value,'D:\\批量源');});
+
+test('batch product editing changes only selected fields and selected products',()=>{const second={...p,id:'product-two',code:'002',name:'第二件'};const result=applyProductBatchPatch([p,second],new Set([p.id]),{mode:'模式B',layoutType:'设计排版',category:'定制挂历'});assert.equal(result[0].mode,'模式B');assert.equal(result[0].layoutType,'设计排版');assert.equal(result[0].category,'定制挂历');assert.deepEqual(result[0].paths,[]);assert.equal(result[0].name,p.name);assert.equal(result[1],second);});
 
 test('new products require one of the two layout categories',()=>{assert.throws(()=>validateState({...state,products:[{...p,layoutType:''}]}),/排版分类/);validateState({...state,products:[{...p,layoutType:'非设计排版'}]});});
 

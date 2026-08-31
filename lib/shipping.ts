@@ -23,6 +23,10 @@ export function transformSku(sku: string, rule?: SkuRule) {
 export function applyPathsToProducts(products: Product[], selectedIds: Set<string>, paths: PathPair[]) {
   return products.map(product => selectedIds.has(product.id) ? { ...product, paths: structuredClone(paths) } : product);
 }
+export type ProductBatchPatch = { mode?: string; layoutType?: LayoutType; category?: string; paths?: PathPair[] };
+export function applyProductBatchPatch(products:Product[],selectedIds:Set<string>,patch:ProductBatchPatch){
+  return products.map(product=>{if(!selectedIds.has(product.id))return product;const next={...product,...patch,paths:patch.paths?structuredClone(patch.paths):product.paths};if(next.layoutType==='设计排版')next.paths=[];return next;});
+}
 export function resolvePath(value: PathValue, aliases: Alias[]): string {
   if (value.kind === 'manual') return value.value.trim();
   const alias = aliases.find(a => a.id === value.aliasId);
