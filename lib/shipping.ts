@@ -2,7 +2,7 @@ export type PathValue = { kind: 'manual' | 'alias'; value: string; aliasId: stri
 export type SkuRule = { enabled: boolean; dropSegments: number; append: string };
 export type PathPair = { source: PathValue; target: PathValue; skuRule?: SkuRule };
 export type LayoutType = '设计排版' | '非设计排版';
-export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; subcategory: string; image: string; note: string; paths: PathPair[] };
+export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; printRequired?: boolean; subcategory: string; image: string; note: string; paths: PathPair[] };
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
 export type ShipmentDetail = Shipment & { warehouse: string; shop: string; packageNo: string; customId?: string };
@@ -11,7 +11,7 @@ export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]
 export const emptyState: AppState = { products: [], aliases: [], batches: [], productCategories: [], productModes: [] };
 export const blankPath = (): PathValue => ({ kind: 'manual', value: '', aliasId: '' });
 export const blankSkuRule = (): SkuRule => ({ enabled: false, dropSegments: 0, append: '' });
-export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', subcategory: '', image: '', note: '', paths: [{ source: blankPath(), target: blankPath(), skuRule: blankSkuRule() }] });
+export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', printRequired: false, subcategory: '', image: '', note: '', paths: [{ source: blankPath(), target: blankPath(), skuRule: blankSkuRule() }] });
 export function productCode(sku: string) { return sku.split('-')[0]; }
 export function transformSku(sku: string, rule?: SkuRule) {
   if (!rule?.enabled) return sku;
@@ -23,7 +23,7 @@ export function transformSku(sku: string, rule?: SkuRule) {
 export function applyPathsToProducts(products: Product[], selectedIds: Set<string>, paths: PathPair[]) {
   return products.map(product => selectedIds.has(product.id) ? { ...product, paths: structuredClone(paths) } : product);
 }
-export type ProductBatchPatch = { mode?: string; layoutType?: LayoutType; category?: string; paths?: PathPair[] };
+export type ProductBatchPatch = { mode?: string; layoutType?: LayoutType; category?: string; printRequired?: boolean; paths?: PathPair[] };
 export function applyProductBatchPatch(products:Product[],selectedIds:Set<string>,patch:ProductBatchPatch){
   return products.map(product=>{if(!selectedIds.has(product.id))return product;const next={...product,...patch,paths:patch.paths?structuredClone(patch.paths):product.paths};if(next.layoutType==='设计排版')next.paths=[];return next;});
 }
@@ -126,6 +126,7 @@ export function validateState(state: AppState): void {
     textField(p.id, '商品ID', 100); textField(p.code, '产品货号', 150); textField(p.name, '产品名称', 200, false);
     if (p.code.includes('-') || p.code !== p.code.trim()) throw new Error('产品货号应为 SKU 第一个 - 前的内容，不能包含 - 或首尾空格');
     textField(p.mode, '产品模式', 60); if (p.layoutType !== undefined && !['设计排版','非设计排版'].includes(p.layoutType)) throw new Error('排版分类只能选择设计排版或非设计排版'); textField(p.category, '产品分类', 60); textField(p.subcategory, '旧版二级分类', 60, false); textField(p.note, '备注', 60, false); textField(p.image, '图片链接', 2000, false);
+    if(p.printRequired!==undefined&&typeof p.printRequired!=='boolean')throw new Error('是否需要打印格式无效');
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
     if (!Array.isArray(p.paths) || p.paths.length > 50 || (p.layoutType!=='设计排版'&&!p.paths.length)) throw new Error('非设计排版商品须有1至50组对应路径');
     for (const pair of p.paths) {

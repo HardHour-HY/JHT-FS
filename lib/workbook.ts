@@ -67,13 +67,14 @@ export async function exportProductTemplate(categories: string[] = [], modes: st
   const ExcelJS = (await import('exceljs')).default;
   const book = new ExcelJS.Workbook();
   const sheet = book.addWorksheet('商品资料导入');
-  const headers = ['产品图片','产品货号','产品模式','产品名称','排版分类','产品分类','源路径填写方式','源路径或剩余路径','源通用名称','目标路径填写方式','目标路径或剩余路径','目标通用名称','SKU处理','删除末尾段数','追加文字','备注'];
+  const headers = ['产品图片','产品货号','产品模式','产品名称','排版分类','产品分类','是否需要打印','源路径填写方式','源路径或剩余路径','源通用名称','目标路径填写方式','目标路径或剩余路径','目标通用名称','SKU处理','删除末尾段数','追加文字','备注'];
   sheet.addRow(headers);
-  sheet.columns = headers.map((header, index) => ({ header, key: String(index), width: index === 0 ? 32 : index >= 6 && index <= 11 ? 22 : 16 }));
+  sheet.columns = headers.map((header, index) => ({ header, key: String(index), width: index === 0 ? 32 : index >= 7 && index <= 12 ? 22 : 16 }));
   sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF276447' } };
-  sheet.getRow(1).height = 28; sheet.views = [{ state: 'frozen', ySplit: 1 }]; sheet.autoFilter = 'A1:P1';
-  ['B','I','L'].forEach(column => sheet.getColumn(column).numFmt = '@');
+  sheet.getRow(1).height = 28; sheet.views = [{ state: 'frozen', ySplit: 1 }]; sheet.autoFilter = 'A1:Q1';
+  ['B','J','M'].forEach(column => sheet.getColumn(column).numFmt = '@');
+  (sheet as any).dataValidations.add('G2:G10000',{type:'list',allowBlank:false,formulae:['"是,否"']});
   if(categories.length){const options=book.addWorksheet('产品分类选项',{state:'veryHidden'});categories.forEach(value=>options.addRow([value]));(sheet as any).dataValidations.add('F2:F10000',{type:'list',allowBlank:false,formulae:[`'产品分类选项'!$A$1:$A$${categories.length}`]});}
   if(modes.length){const options=book.addWorksheet('产品模式选项',{state:'veryHidden'});modes.forEach(value=>options.addRow([value]));(sheet as any).dataValidations.add('C2:C10000',{type:'list',allowBlank:false,formulae:[`'产品模式选项'!$A$1:$A$${modes.length}`]});}
   const guide = book.addWorksheet('填写说明');
@@ -85,6 +86,7 @@ export async function exportProductTemplate(categories: string[] = [], modes: st
     ['已有产品货号','导入会更新商品资料，并用表格中的路径替换该商品现有的全部路径。'],
     ['必填字段','产品货号、产品模式、排版分类、产品分类。非设计排版商品还必须填写源路径和目标路径；产品名称可留空，填写后不能与其他商品重复。产品货号必须唯一。'],
     ['排版分类','只能填写“设计排版”或“非设计排版”，必须二选一。设计排版商品无需填写路径及 SKU 处理相关单元格。'],
+    ['是否需要打印','只能填写“是”或“否”；新商品不填写时按“否”处理。'],
     ['备注','最多60个中文字符。图片必须是 http 或 https 网络地址。'],
   ]);
   guide.columns = [{width:22},{width:95}]; guide.getRow(1).font = {bold:true,color:{argb:'FFFFFFFF'}}; guide.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF276447'}};
