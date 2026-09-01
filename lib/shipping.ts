@@ -5,7 +5,7 @@ export type LayoutType = '设计排版' | '非设计排版';
 export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; printRequired?: boolean; subcategory: string; image: string; note: string; paths: PathPair[] };
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
-export type ShipmentDetail = Shipment & { warehouse: string; shop: string; packageNo: string; customId?: string };
+export type ShipmentDetail = Shipment & { warehouse: string; shop: string; packageNo: string; customId?: string; orderNo?: string };
 export type Batch = { id: string; name: string; createdAt: string; sourceRows: number; rows: Shipment[]; details?: ShipmentDetail[] };
 export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]; productCategories?: string[]; productModes?: string[] };
 export const emptyState: AppState = { products: [], aliases: [], batches: [], productCategories: [], productModes: [] };
@@ -60,15 +60,15 @@ export function aggregate(rows: unknown[][], skuColumn: number, quantityColumn: 
   if (!Number.isSafeInteger(result.reduce((n, r) => n + r.quantity, 0))) issues.push('总数量超出安全范围');
   return { rows: result, issues, sourceRows };
 }
-export function extractShipmentDetails(rows: unknown[][], columns:{skuColumn:number;quantityColumn:number;warehouseColumn:number;shopColumn:number;packageColumn:number;customIdColumn?:number},headerRow:number){
+export function extractShipmentDetails(rows: unknown[][], columns:{skuColumn:number;quantityColumn:number;warehouseColumn:number;shopColumn:number;packageColumn:number;customIdColumn?:number;orderNoColumn?:number},headerRow:number){
   const issues:string[]=[],details:ShipmentDetail[]=[];
   for(const [index,row] of rows.slice(headerRow+1).entries()){
     if(row.every(v=>v===null||v===undefined||String(v).trim()===''))continue;
     const line=headerRow+index+2,sku=String(row[columns.skuColumn]??'').trim(),raw=String(row[columns.quantityColumn]??'').trim(),quantity=Number(raw);
     if(!sku||!/^\d+(?:\.0+)?$/.test(raw)||!Number.isSafeInteger(quantity)||quantity<=0)continue;
-    const warehouse=String(row[columns.warehouseColumn]??'').trim(),shop=String(row[columns.shopColumn]??'').trim(),packageNo=String(row[columns.packageColumn]??'').trim(),customId=columns.customIdColumn===undefined||columns.customIdColumn<0?'':String(row[columns.customIdColumn]??'').trim();
+    const warehouse=String(row[columns.warehouseColumn]??'').trim(),shop=String(row[columns.shopColumn]??'').trim(),packageNo=String(row[columns.packageColumn]??'').trim(),customId=columns.customIdColumn===undefined||columns.customIdColumn<0?'':String(row[columns.customIdColumn]??'').trim(),orderNo=columns.orderNoColumn===undefined||columns.orderNoColumn<0?'':String(row[columns.orderNoColumn]??'').trim();
     if(!warehouse)issues.push(`第 ${line} 行：收货仓库不能为空`);if(!shop)issues.push(`第 ${line} 行：店铺不能为空`);if(!packageNo)issues.push(`第 ${line} 行：包裹号不能为空`);
-    if(warehouse&&shop&&packageNo)details.push({sku,quantity,warehouse,shop,packageNo,customId});
+    if(warehouse&&shop&&packageNo)details.push({sku,quantity,warehouse,shop,packageNo,customId,orderNo});
   }
   return {details,issues};
 }
@@ -147,7 +147,7 @@ export function validateState(state: AppState): void {
     if (!Number.isSafeInteger(b.sourceRows) || b.sourceRows < 1 || !Array.isArray(b.rows) || !b.rows.length || b.rows.length > 20000) throw new Error('批次数据无效');
     unique(b.rows.map(r => r.sku), '批次SKU');
     for (const r of b.rows) { textField(r.sku, 'SKU', 500); if (!productCode(r.sku) || !Number.isSafeInteger(r.quantity) || r.quantity <= 0) throw new Error('发货数量或SKU无效'); }
-    if(b.details!==undefined){if(!Array.isArray(b.details)||b.details.length>20000)throw new Error('批次汇总明细无效');for(const r of b.details){textField(r.sku,'SKU',500);textField(r.warehouse,'收货仓库',300);textField(r.shop,'店铺',300);textField(r.packageNo,'包裹号',300);textField(r.customId||'','定制ID',500,false);if(!Number.isSafeInteger(r.quantity)||r.quantity<=0)throw new Error('批次汇总数量无效');}}
+    if(b.details!==undefined){if(!Array.isArray(b.details)||b.details.length>20000)throw new Error('批次汇总明细无效');for(const r of b.details){textField(r.sku,'SKU',500);textField(r.warehouse,'收货仓库',300);textField(r.shop,'店铺',300);textField(r.packageNo,'包裹号',300);textField(r.customId||'','定制ID',500,false);textField(r.orderNo||'','订单号',500,false);if(!Number.isSafeInteger(r.quantity)||r.quantity<=0)throw new Error('批次汇总数量无效');}}
     if (!Number.isSafeInteger(b.rows.reduce((n, r) => n + r.quantity, 0))) throw new Error('批次总数量超出安全范围');
   }
 }

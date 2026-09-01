@@ -39,7 +39,7 @@ export function detectColumns(rows: string[][]) {
   if (headerRow < 0) headerRow = 0;
   const headers = rows[headerRow] || [];
   const find=(names:string[])=>headers.findIndex(v=>names.includes(v.trim()));
-  return { headerRow, skuColumn: find(['SKU货号','SKU','sku']), quantityColumn: find(['发货数','发货数量','数量']), warehouseColumn:find(['收货仓库','仓库']),shopColumn:find(['店铺','店铺名称']),packageColumn:find(['包裹号','包裹编号']),customIdColumn:find(['定制ID','定制 Id','定制id','Custom ID','custom_id']) };
+  return { headerRow, skuColumn: find(['SKU货号','SKU','sku']), quantityColumn: find(['发货数','发货数量','数量']), warehouseColumn:find(['收货仓库','仓库']),shopColumn:find(['店铺','店铺名称']),packageColumn:find(['包裹号','包裹编号']),customIdColumn:find(['定制ID','定制 Id','定制id','Custom ID','custom_id']),orderNoColumn:find(['订单号','订单编号','订单ID','order_id']) };
 }
 export function download(content: BlobPart, name: string, type: string) {
   const url = URL.createObjectURL(new File([content], name, { type }));
@@ -176,5 +176,19 @@ export async function exportModeSummary(batch:Batch,products:Product[]){
   customNoPrintRows.forEach((values,index)=>values.forEach((value,column)=>designSheet.getCell(index+2,column+5).value=value));mergeDesign(customNoPrintRows,5,3);designTotal(customNoPrintRows.length+2,5,['合计','','',customNoPrintRows.reduce((sum,row)=>sum+Number(row[3]),0)]);
   customPrintRows.forEach((values,index)=>values.forEach((value,column)=>designSheet.getCell(index+2,column+10).value=value));mergeDesign(customPrintRows,10,4);designTotal(customPrintRows.length+2,10,['合计','','','',customPrintRows.reduce((sum,row)=>sum+Number(row[4]),0)]);
   designSheet.columns=[{width:20},{width:32},{width:14},{width:4},{width:20},{width:32},{width:24},{width:14},{width:4},{width:20},{width:32},{width:24},{width:22},{width:14}];designSheet.views=[{state:'frozen',ySplit:1}];
+  const orderSheet=book.addWorksheet('下载订单与合并订单'),orderDetails=designDetails.filter(item=>!item.product.printRequired||(item.product.printRequired&&item.product.layoutType==='设计排版'));
+  if(orderDetails.some(item=>!item.row.orderNo?.trim()))throw new Error('下载订单与合并订单所需商品缺少订单号，请重新上传并选择“订单号”列');
+  const orderHeaders=(column:number,headers:string[])=>headers.forEach((header,index)=>{const cell=orderSheet.getCell(1,column+index);cell.value=header;cell.font={bold:true,color:{argb:'FFFFFFFF'}};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF276447'}};});
+  const orderTotal=(row:number,column:number,values:(string|number)[])=>values.forEach((value,index)=>{const cell=orderSheet.getCell(row,column+index);cell.value=value;cell.font={bold:true};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F1EC'}};});
+  const mergeOrders=(rows:(string|number)[][],startColumn:number,dimensionColumns:number)=>{for(let dimension=0;dimension<dimensionColumns;dimension++){let from=0;while(from<rows.length){let to=from+1;while(to<rows.length&&rows[to].slice(0,dimension+1).every((value,index)=>value===rows[from][index]))to++;if(to-from>1){orderSheet.mergeCells(from+2,startColumn+dimension,to+1,startColumn+dimension);orderSheet.getCell(from+2,startColumn+dimension).alignment={vertical:'middle'};}from=to;}}};
+  orderHeaders(1,['分类','订单号','发货数']);orderHeaders(5,['订单号','发货数']);
+  const categorizedOrders=new Map<string,{category:string;orderNo:string;quantity:number}>();
+  for(const {row,product} of orderDetails){const category=product.printRequired?'打印设计排版产品':'不打印产品',orderNo=row.orderNo!.trim(),key=`${category}\u0000${orderNo}`,prior=categorizedOrders.get(key);if(prior)prior.quantity+=row.quantity;else categorizedOrders.set(key,{category,orderNo,quantity:row.quantity});}
+  const categorizedRows=[...categorizedOrders.values()].sort((a,b)=>[a.category,a.orderNo].join('\u0000').localeCompare([b.category,b.orderNo].join('\u0000'),'zh-CN')).map(item=>[item.category,item.orderNo,item.quantity] as (string|number)[]);
+  categorizedRows.forEach((values,index)=>values.forEach((value,column)=>orderSheet.getCell(index+2,column+1).value=value));mergeOrders(categorizedRows,1,2);orderTotal(categorizedRows.length+2,1,['合计','',categorizedRows.reduce((sum,row)=>sum+Number(row[2]),0)]);
+  const designPrintOrders=new Map<string,number>();for(const {row,product} of orderDetails.filter(item=>item.product.printRequired&&item.product.layoutType==='设计排版')){const orderNo=row.orderNo!.trim();designPrintOrders.set(orderNo,(designPrintOrders.get(orderNo)||0)+row.quantity);}
+  const designPrintOrderRows=[...designPrintOrders].sort(([a],[b])=>a.localeCompare(b,'zh-CN')).map(([orderNo,quantity])=>[orderNo,quantity] as (string|number)[]);
+  designPrintOrderRows.forEach((values,index)=>values.forEach((value,column)=>orderSheet.getCell(index+2,column+5).value=value));mergeOrders(designPrintOrderRows,5,1);orderTotal(designPrintOrderRows.length+2,5,['合计',designPrintOrderRows.reduce((sum,row)=>sum+Number(row[1]),0)]);
+  orderSheet.columns=[{width:24},{width:32},{width:14},{width:4},{width:32},{width:14}];orderSheet.views=[{state:'frozen',ySplit:1}];
   download(await book.xlsx.writeBuffer() as BlobPart,`${batch.name.replace(/\.[^.]+$/,'')}-模式汇总.xlsx`,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 }
