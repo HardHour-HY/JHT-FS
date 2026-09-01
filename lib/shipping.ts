@@ -85,12 +85,13 @@ export function summarize(rows: Shipment[], products: Product[]) {
   }
   return { total, modes: Array.from(modes), unmatched, missing: Array.from(missing) };
 }
-export function copyRows(rows: Shipment[], state: AppState): (string | number)[][] {
+export function copyRows(rows: Shipment[], state: AppState, printRequired?: boolean): (string | number)[][] {
   const lookup = new Map(state.products.map(p => [p.code, p]));
   const result: (string | number)[][] = [];
   for (const row of rows) {
     const product = lookup.get(productCode(row.sku));
     if (!product) throw new Error(`请先建立产品信息：${productCode(row.sku)}`);
+    if (printRequired !== undefined && Boolean(product.printRequired) !== printRequired) continue;
     if (product.layoutType === '设计排版' && !product.printRequired) continue;
     if (!product.paths.length) throw new Error(`${product.code} 尚未配置路径`);
     for (const pair of product.paths) {
