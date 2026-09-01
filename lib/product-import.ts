@@ -39,7 +39,7 @@ export function parseProducts(rows: string[][], headerRow: number, existing: Pro
       const found=aliasMap.get(aliasLabel);if(!found)issues.push(`第 ${line} 行：找不到通用路径“${aliasLabel||'空'}”`);return {kind,value,aliasId:found?.id||''};
     };
     const printRequired=printText?printText==='是':existingMap.get(code)?.printRequired??false;
-    const needsPaths=layoutType!=='设计排版'||printRequired;
+    const needsPaths=productMode!=='定制'&&(layoutType!=='设计排版'||printRequired);
     const source=needsPaths?makePath('源路径填写方式','源路径或剩余路径','源通用名称'):null,target=needsPaths?makePath('目标路径填写方式','目标路径或剩余路径','目标通用名称'):null;
     const ruleEnabled=index.has('SKU处理')&&['是','开启','yes','1'].includes(String(row[index.get('SKU处理')!]??'').trim().toLowerCase());
     const dropRaw=index.has('删除末尾段数')?String(row[index.get('删除末尾段数')!]??'').trim():'';

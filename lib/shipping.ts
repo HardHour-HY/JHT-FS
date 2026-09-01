@@ -93,7 +93,7 @@ export function copyRows(rows: Shipment[], state: AppState, printRequired?: bool
     if (!product) throw new Error(`请先建立产品信息：${productCode(row.sku)}`);
     if (printRequired !== undefined && Boolean(product.printRequired) !== printRequired) continue;
     if (product.layoutType === '设计排版' && !product.printRequired) continue;
-    if (!product.paths.length) throw new Error(`${product.code} 尚未配置路径`);
+    if (!product.paths.length) { if (product.mode === '定制') continue; throw new Error(`${product.code} 尚未配置路径`); }
     for (const pair of product.paths) {
       const source = resolvePath(pair.source, state.aliases), target = resolvePath(pair.target, state.aliases);
       if (!source || !target) throw new Error(`${product.code} 的路径尚未填写完整`);
@@ -129,7 +129,7 @@ export function validateState(state: AppState): void {
     textField(p.mode, '产品模式', 60); if (p.layoutType !== undefined && !['设计排版','非设计排版'].includes(p.layoutType)) throw new Error('排版分类只能选择设计排版或非设计排版'); textField(p.category, '产品分类', 60); textField(p.subcategory, '旧版二级分类', 60, false); textField(p.note, '备注', 60, false); textField(p.image, '图片链接', 2000, false);
     if(p.printRequired!==undefined&&typeof p.printRequired!=='boolean')throw new Error('是否需要打印格式无效');
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
-    if (!Array.isArray(p.paths) || p.paths.length > 50 || ((p.layoutType!=='设计排版'||p.printRequired)&&!p.paths.length)) throw new Error('非设计排版或需要打印的商品须有1至50组对应路径');
+    if (!Array.isArray(p.paths) || p.paths.length > 50 || (p.mode!=='定制'&&(p.layoutType!=='设计排版'||p.printRequired)&&!p.paths.length)) throw new Error('非定制商品在非设计排版或需要打印时须有1至50组对应路径');
     for (const pair of p.paths) {
       for (const path of [pair.source, pair.target]) {
         if (!path || !['manual', 'alias'].includes(path.kind)) throw new Error('路径格式无效');
