@@ -49,7 +49,7 @@ export function parseProducts(rows: string[][], headerRow: number, existing: Pro
     if(ruleEnabled&&/[<>:"/\\|?*]/.test(append))issues.push(`第 ${line} 行：追加文字包含 Windows 文件名禁用字符`);
     const skuRule:SkuRule={enabled:ruleEnabled,dropSegments:Number.isSafeInteger(dropSegments)?dropSegments:0,append};
     if(!code||(hasPath&&(!source||!target)))return;
-    const old=existingMap.get(code); const base={id:old?.id||idFactory(),code,name,mode:productMode,layoutType:layoutType as Product['layoutType'],category,printRequired,subcategory:old?.subcategory||'',image,note};
+    const old=existingMap.get(code); const base={id:old?.id||idFactory(),code,name,mode:productMode,layoutType:layoutType as Product['layoutType'],category,printRequired,writeAccessories:old?.writeAccessories??false,accessories:old?.accessories??[],subcategory:old?.subcategory||'',image,note};
     const prior=grouped.get(code);
     if(prior){const same=['name','mode','layoutType','category','printRequired','subcategory','image','note'].every(k=>prior.base[k as keyof typeof prior.base]===base[k as keyof typeof base]);if(!same)issues.push(`第 ${line} 行：产品 ${code} 的资料与第 ${prior.firstLine} 行不一致`);if(hasPath)prior.paths.push({source:source!,target:target!,skuRule});}
     else grouped.set(code,{base,paths:hasPath?[{source:source!,target:target!,skuRule}]:[],firstLine:line});

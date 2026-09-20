@@ -2,7 +2,8 @@ export type PathValue = { kind: 'manual' | 'alias'; value: string; aliasId: stri
 export type SkuRule = { enabled: boolean; dropSegments: number; append: string };
 export type PathPair = { source: PathValue; target: PathValue; skuRule?: SkuRule };
 export type LayoutType = '设计排版' | '非设计排版';
-export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; printRequired?: boolean; subcategory: string; image: string; note: string; paths: PathPair[] };
+export type Accessory = { id: string; name: string; imageKey: string; quantity: number };
+export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; printRequired?: boolean; writeAccessories?: boolean; accessories?: Accessory[]; subcategory: string; image: string; note: string; paths: PathPair[] };
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
 export type ShipmentDetail = Shipment & { warehouse: string; shop: string; packageNo: string; customId?: string; orderNo?: string };
@@ -11,7 +12,7 @@ export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]
 export const emptyState: AppState = { products: [], aliases: [], batches: [], productCategories: [], productModes: [] };
 export const blankPath = (): PathValue => ({ kind: 'manual', value: '', aliasId: '' });
 export const blankSkuRule = (): SkuRule => ({ enabled: false, dropSegments: 0, append: '' });
-export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', printRequired: false, subcategory: '', image: '', note: '', paths: [] });
+export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', printRequired: false, writeAccessories: false, accessories: [], subcategory: '', image: '', note: '', paths: [] });
 export function productCode(sku: string) { return sku.split('-')[0]; }
 export function transformSku(sku: string, rule?: SkuRule) {
   if (!rule?.enabled) return sku;
@@ -127,6 +128,18 @@ export function validateState(state: AppState): void {
     if (p.code.includes('-') || p.code !== p.code.trim()) throw new Error('产品货号应为 SKU 第一个 - 前的内容，不能包含 - 或首尾空格');
     textField(p.mode, '产品模式', 60); if (p.layoutType !== undefined && !['设计排版','非设计排版'].includes(p.layoutType)) throw new Error('排版分类只能选择设计排版或非设计排版'); textField(p.category, '产品分类', 60); textField(p.subcategory, '旧版二级分类', 60, false); textField(p.note, '备注', 60, false); textField(p.image, '图片链接', 2000, false);
     if(p.printRequired!==undefined&&typeof p.printRequired!=='boolean')throw new Error('是否需要打印格式无效');
+    if(p.writeAccessories!==undefined&&typeof p.writeAccessories!=='boolean')throw new Error('是否写入配件格式无效');
+    const accessories=p.accessories??[];
+    if(!Array.isArray(accessories)||accessories.length>15)throw new Error('每个商品最多可以添加15个配件');
+    if(p.writeAccessories&&accessories.length===0)throw new Error('选择写入配件时，至少需要添加1个配件');
+    if(!p.writeAccessories&&accessories.length)throw new Error('不写入配件的商品不能保留配件资料');
+    const accessoryIds=new Set<string>();
+    for(const accessory of accessories){
+      textField(accessory.id,'配件ID',100);textField(accessory.name,'配件名称',100);textField(accessory.imageKey,'配件图片',100);
+      if(!/^[A-Za-z0-9_-]+$/.test(accessory.imageKey))throw new Error('配件图片标识格式无效');
+      if(accessoryIds.has(accessory.id))throw new Error('同一商品的配件ID不能重复');accessoryIds.add(accessory.id);
+      if(!Number.isSafeInteger(accessory.quantity)||accessory.quantity<1||accessory.quantity>99999)throw new Error('配件数量须为1至99999的整数');
+    }
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
     if (!Array.isArray(p.paths) || p.paths.length > 50) throw new Error('商品文件路径只能填写0至50组');
     for (const pair of p.paths) {
