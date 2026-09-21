@@ -3,7 +3,8 @@ export type SkuRule = { enabled: boolean; dropSegments: number; append: string }
 export type PathPair = { source: PathValue; target: PathValue; skuRule?: SkuRule };
 export type LayoutType = '设计排版' | '非设计排版';
 export type AccessoryDefinition = { id: string; name: string; imageKey: string };
-export type Accessory = { id: string; accessoryId: string; quantity: number; name?: string; imageKey?: string };
+export type AccessoryUnit = '' | '个' | '对' | '张' | '根';
+export type Accessory = { id: string; accessoryId: string; quantity: number; unit?: AccessoryUnit; name?: string; imageKey?: string };
 export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; printRequired?: boolean; writeAccessories?: boolean; accessories?: Accessory[]; subcategory: string; image: string; note: string; paths: PathPair[] };
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
@@ -17,8 +18,8 @@ export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), 
 export function normalizeState(input:AppState):AppState{
   const state=structuredClone(input),catalog=[...(state.accessoryCatalog??[])],byName=new Map(catalog.map(item=>[item.name.trim(),item]));
   state.products=state.products.map(product=>({...product,writeAccessories:Boolean(product.writeAccessories),accessories:(product.accessories??[]).map(item=>{
-    if(item.accessoryId)return {id:item.id,accessoryId:item.accessoryId,quantity:item.quantity};
-    if(item.name?.trim()&&item.imageKey){let definition=byName.get(item.name.trim());if(!definition){definition={id:`legacy_${item.imageKey}`,name:item.name.trim(),imageKey:item.imageKey};catalog.push(definition);byName.set(definition.name,definition);}return {id:item.id,accessoryId:definition.id,quantity:item.quantity};}
+    if(item.accessoryId)return {id:item.id,accessoryId:item.accessoryId,quantity:item.quantity,unit:item.unit??''};
+    if(item.name?.trim()&&item.imageKey){let definition=byName.get(item.name.trim());if(!definition){definition={id:`legacy_${item.imageKey}`,name:item.name.trim(),imageKey:item.imageKey};catalog.push(definition);byName.set(definition.name,definition);}return {id:item.id,accessoryId:definition.id,quantity:item.quantity,unit:item.unit??''};}
     return item;
   })}));
   state.accessoryCatalog=catalog;return state;
@@ -154,6 +155,7 @@ export function validateState(state: AppState): void {
       if(!accessoryIds.has(accessory.accessoryId))throw new Error('商品选择了不存在的配件');
       if(productAccessoryIds.has(accessory.accessoryId))throw new Error('同一商品不能重复选择同一个配件');productAccessoryIds.add(accessory.accessoryId);
       if(!Number.isSafeInteger(accessory.quantity)||accessory.quantity<1||accessory.quantity>99999)throw new Error('配件数量须为1至99999的整数');
+      if(accessory.unit!==undefined&&!['','个','对','张','根'].includes(accessory.unit))throw new Error('配件单位只能选择个、对、张、根或不加单位');
     }
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
     if (!Array.isArray(p.paths) || p.paths.length > 50) throw new Error('商品文件路径只能填写0至50组');
