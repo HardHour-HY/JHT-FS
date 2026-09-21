@@ -5,7 +5,8 @@ export type LayoutType = '设计排版' | '非设计排版';
 export type AccessoryDefinition = { id: string; name: string; imageKey: string };
 export type AccessoryUnit = '' | '个' | '对' | '张' | '根';
 export type Accessory = { id: string; accessoryId: string; quantity: number; unit?: AccessoryUnit; name?: string; imageKey?: string };
-export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; printRequired?: boolean; writeAccessories?: boolean; accessories?: Accessory[]; subcategory: string; image: string; imageKey?: string; note: string; paths: PathPair[] };
+export type Material = { id: string; name: string };
+export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; printRequired?: boolean; writeAccessories?: boolean; accessories?: Accessory[]; writeMaterials?: boolean; materials?: Material[]; subcategory: string; image: string; imageKey?: string; note: string; paths: PathPair[] };
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
 export type ShipmentDetail = Shipment & { warehouse: string; shop: string; packageNo: string; customId?: string; orderNo?: string };
@@ -14,14 +15,14 @@ export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]
 export const emptyState: AppState = { products: [], aliases: [], batches: [], productCategories: [], productModes: [], accessoryCatalog: [] };
 export const blankPath = (): PathValue => ({ kind: 'manual', value: '', aliasId: '' });
 export const blankSkuRule = (): SkuRule => ({ enabled: false, dropSegments: 0, append: '' });
-export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', printRequired: false, writeAccessories: false, accessories: [], subcategory: '', image: '', imageKey: '', note: '', paths: [] });
+export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', printRequired: false, writeAccessories: false, accessories: [], writeMaterials: false, materials: [], subcategory: '', image: '', imageKey: '', note: '', paths: [] });
 export function normalizeState(input:AppState):AppState{
   const state=structuredClone(input),catalog=[...(state.accessoryCatalog??[])],byName=new Map(catalog.map(item=>[item.name.trim(),item]));
   state.products=state.products.map(product=>({...product,writeAccessories:Boolean(product.writeAccessories),accessories:(product.accessories??[]).map(item=>{
     if(item.accessoryId)return {id:item.id,accessoryId:item.accessoryId,quantity:item.quantity,unit:item.unit??''};
     if(item.name?.trim()&&item.imageKey){let definition=byName.get(item.name.trim());if(!definition){definition={id:`legacy_${item.imageKey}`,name:item.name.trim(),imageKey:item.imageKey};catalog.push(definition);byName.set(definition.name,definition);}return {id:item.id,accessoryId:definition.id,quantity:item.quantity,unit:item.unit??''};}
     return item;
-  })}));
+  }),writeMaterials:Boolean(product.writeMaterials),materials:product.materials??[]}));
   state.accessoryCatalog=catalog;return state;
 }
 export function productCode(sku: string) { return sku.split('-')[0]; }
@@ -157,6 +158,13 @@ export function validateState(state: AppState): void {
       if(!Number.isSafeInteger(accessory.quantity)||accessory.quantity<1||accessory.quantity>99999)throw new Error('配件数量须为1至99999的整数');
       if(accessory.unit!==undefined&&!['','个','对','张','根'].includes(accessory.unit))throw new Error('配件单位只能选择个、对、张、根或不加单位');
     }
+    if(p.writeMaterials!==undefined&&typeof p.writeMaterials!=='boolean')throw new Error('是否写入材质格式无效');
+    const materials=p.materials??[];
+    if(!Array.isArray(materials)||materials.length>15)throw new Error('每个商品最多可以添加15个材质');
+    if(p.writeMaterials&&materials.length===0)throw new Error('选择写入材质时，至少需要添加1个材质');
+    if(!p.writeMaterials&&materials.length)throw new Error('不写入材质的商品不能保留材质资料');
+    unique(materials.map(material=>material.id),'商品材质ID');unique(materials.map(material=>material.name.trim()),'商品材质名称');
+    for(const material of materials){textField(material.id,'商品材质ID',100);textField(material.name,'材质名称',100);}
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
     textField(p.imageKey??'','本地商品图片',100,false);if(p.imageKey&&!/^[A-Za-z0-9_-]+$/.test(p.imageKey))throw new Error('本地商品图片标识格式无效');if(p.image&&p.imageKey)throw new Error('商品图片不能同时使用网络链接和本地上传');
     if (!Array.isArray(p.paths) || p.paths.length > 50) throw new Error('商品文件路径只能填写0至50组');

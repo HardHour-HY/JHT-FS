@@ -84,3 +84,7 @@ test('bulk import allows custom-mode products without copy paths',()=>{const hea
 
 
 test('product image is optional and accepts either a network URL or local upload',()=>{validateState({...state,products:[{...p,image:'',imageKey:''}]});validateState({...state,products:[{...p,image:'https://example.com/product.jpg',imageKey:''}]});validateState({...state,products:[{...p,image:'',imageKey:'local_image_1'}]});assert.throws(()=>validateState({...state,products:[{...p,image:'https://example.com/product.jpg',imageKey:'local_image_1'}]}),/不能同时/);});
+
+test('product materials are optional and validated when enabled',()=>{validateState({...state,products:[{...p,writeMaterials:false,materials:[]}]});validateState({...state,products:[{...p,writeMaterials:true,materials:[{id:'material-1',name:'纯棉'},{id:'material-2',name:'亚克力'}]}]});assert.throws(()=>validateState({...state,products:[{...p,writeMaterials:true,materials:[]}]}),/至少/);assert.throws(()=>validateState({...state,products:[{...p,writeMaterials:false,materials:[{id:'material-1',name:'纯棉'}]}]}),/不能保留/);assert.throws(()=>validateState({...state,products:[{...p,writeMaterials:true,materials:[{id:'material-1',name:'纯棉'},{id:'material-2',name:'纯棉'}]}]}),/不能重复/);});
+
+test('normalization defaults legacy products to no materials',()=>{const normalized=normalizeState(state);assert.equal(normalized.products[0].writeMaterials,false);assert.deepEqual(normalized.products[0].materials,[]);});
