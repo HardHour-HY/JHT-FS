@@ -132,7 +132,7 @@ export function validateState(state: AppState): void {
   const catalog=state.accessoryCatalog??[];
   if(!Array.isArray(catalog)||catalog.length>1000)throw new Error('配件库最多保存1000个配件');
   unique(catalog.map(item=>item.id),'配件库ID');unique(catalog.map(item=>item.name.trim()),'配件名称');
-  for(const item of catalog){textField(item.id,'配件库ID',100);textField(item.name,'配件名称',100);textField(item.imageKey,'配件图片',100);if(!/^[A-Za-z0-9_-]+$/.test(item.imageKey))throw new Error('配件图片标识格式无效');}
+  for(const item of catalog){textField(item.id,'配件库ID',100);textField(item.name,'配件名称',100);textField(item.imageKey,'配件图片',100,false);if(item.imageKey&&!/^[A-Za-z0-9_-]+$/.test(item.imageKey))throw new Error('配件图片标识格式无效');}
   const accessoryIds=new Set(catalog.map(item=>item.id));
   unique(state.aliases.map(a => a.id), '路径ID'); unique(state.aliases.map(a => a.name.trim()), '路径名称');
   unique(state.products.map(p => p.id), '商品ID'); unique(state.products.map(p => p.code.trim()), '产品货号'); unique(state.products.map(p => p.name.trim()).filter(Boolean), '产品名称');
