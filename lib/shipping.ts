@@ -2,17 +2,27 @@ export type PathValue = { kind: 'manual' | 'alias'; value: string; aliasId: stri
 export type SkuRule = { enabled: boolean; dropSegments: number; append: string };
 export type PathPair = { source: PathValue; target: PathValue; skuRule?: SkuRule };
 export type LayoutType = '设计排版' | '非设计排版';
-export type Accessory = { id: string; name: string; imageKey: string; quantity: number };
+export type AccessoryDefinition = { id: string; name: string; imageKey: string };
+export type Accessory = { id: string; accessoryId: string; quantity: number; name?: string; imageKey?: string };
 export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; printRequired?: boolean; writeAccessories?: boolean; accessories?: Accessory[]; subcategory: string; image: string; note: string; paths: PathPair[] };
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
 export type ShipmentDetail = Shipment & { warehouse: string; shop: string; packageNo: string; customId?: string; orderNo?: string };
 export type Batch = { id: string; name: string; createdAt: string; sourceRows: number; rows: Shipment[]; details?: ShipmentDetail[] };
-export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]; productCategories?: string[]; productModes?: string[] };
-export const emptyState: AppState = { products: [], aliases: [], batches: [], productCategories: [], productModes: [] };
+export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]; productCategories?: string[]; productModes?: string[]; accessoryCatalog?: AccessoryDefinition[] };
+export const emptyState: AppState = { products: [], aliases: [], batches: [], productCategories: [], productModes: [], accessoryCatalog: [] };
 export const blankPath = (): PathValue => ({ kind: 'manual', value: '', aliasId: '' });
 export const blankSkuRule = (): SkuRule => ({ enabled: false, dropSegments: 0, append: '' });
 export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', printRequired: false, writeAccessories: false, accessories: [], subcategory: '', image: '', note: '', paths: [] });
+export function normalizeState(input:AppState):AppState{
+  const state=structuredClone(input),catalog=[...(state.accessoryCatalog??[])],byName=new Map(catalog.map(item=>[item.name.trim(),item]));
+  state.products=state.products.map(product=>({...product,writeAccessories:Boolean(product.writeAccessories),accessories:(product.accessories??[]).map(item=>{
+    if(item.accessoryId)return {id:item.id,accessoryId:item.accessoryId,quantity:item.quantity};
+    if(item.name?.trim()&&item.imageKey){let definition=byName.get(item.name.trim());if(!definition){definition={id:`legacy_${item.imageKey}`,name:item.name.trim(),imageKey:item.imageKey};catalog.push(definition);byName.set(definition.name,definition);}return {id:item.id,accessoryId:definition.id,quantity:item.quantity};}
+    return item;
+  })}));
+  state.accessoryCatalog=catalog;return state;
+}
 export function productCode(sku: string) { return sku.split('-')[0]; }
 export function transformSku(sku: string, rule?: SkuRule) {
   if (!rule?.enabled) return sku;
@@ -119,6 +129,11 @@ export function validateState(state: AppState): void {
   const unique = (values: string[], name: string) => { if (new Set(values).size !== values.length) throw new Error(`${name}不能重复`); };
   if(state.productCategories!==undefined){if(!Array.isArray(state.productCategories)||state.productCategories.length>200)throw new Error('产品分类选项格式无效');unique(state.productCategories.map(c=>c.trim()),'产品分类选项');for(const c of state.productCategories)textField(c,'产品分类选项',60);}
   if(state.productModes!==undefined){if(!Array.isArray(state.productModes)||state.productModes.length>200)throw new Error('产品模式选项格式无效');unique(state.productModes.map(c=>c.trim()),'产品模式选项');for(const c of state.productModes)textField(c,'产品模式选项',60);}
+  const catalog=state.accessoryCatalog??[];
+  if(!Array.isArray(catalog)||catalog.length>1000)throw new Error('配件库最多保存1000个配件');
+  unique(catalog.map(item=>item.id),'配件库ID');unique(catalog.map(item=>item.name.trim()),'配件名称');
+  for(const item of catalog){textField(item.id,'配件库ID',100);textField(item.name,'配件名称',100);textField(item.imageKey,'配件图片',100);if(!/^[A-Za-z0-9_-]+$/.test(item.imageKey))throw new Error('配件图片标识格式无效');}
+  const accessoryIds=new Set(catalog.map(item=>item.id));
   unique(state.aliases.map(a => a.id), '路径ID'); unique(state.aliases.map(a => a.name.trim()), '路径名称');
   unique(state.products.map(p => p.id), '商品ID'); unique(state.products.map(p => p.code.trim()), '产品货号'); unique(state.products.map(p => p.name.trim()).filter(Boolean), '产品名称');
   unique(state.batches.map(b => b.id), '批次ID');
@@ -133,11 +148,11 @@ export function validateState(state: AppState): void {
     if(!Array.isArray(accessories)||accessories.length>15)throw new Error('每个商品最多可以添加15个配件');
     if(p.writeAccessories&&accessories.length===0)throw new Error('选择写入配件时，至少需要添加1个配件');
     if(!p.writeAccessories&&accessories.length)throw new Error('不写入配件的商品不能保留配件资料');
-    const accessoryIds=new Set<string>();
+    const productAccessoryIds=new Set<string>();
     for(const accessory of accessories){
-      textField(accessory.id,'配件ID',100);textField(accessory.name,'配件名称',100);textField(accessory.imageKey,'配件图片',100);
-      if(!/^[A-Za-z0-9_-]+$/.test(accessory.imageKey))throw new Error('配件图片标识格式无效');
-      if(accessoryIds.has(accessory.id))throw new Error('同一商品的配件ID不能重复');accessoryIds.add(accessory.id);
+      textField(accessory.id,'商品配件ID',100);textField(accessory.accessoryId,'配件选择',100);
+      if(!accessoryIds.has(accessory.accessoryId))throw new Error('商品选择了不存在的配件');
+      if(productAccessoryIds.has(accessory.accessoryId))throw new Error('同一商品不能重复选择同一个配件');productAccessoryIds.add(accessory.accessoryId);
       if(!Number.isSafeInteger(accessory.quantity)||accessory.quantity<1||accessory.quantity>99999)throw new Error('配件数量须为1至99999的整数');
     }
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
