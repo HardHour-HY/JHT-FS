@@ -5,7 +5,7 @@ export type LayoutType = '设计排版' | '非设计排版';
 export type AccessoryDefinition = { id: string; name: string; imageKey: string };
 export type AccessoryUnit = '' | '个' | '对' | '张' | '根';
 export type Accessory = { id: string; accessoryId: string; quantity: number; unit?: AccessoryUnit; name?: string; imageKey?: string };
-export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; printRequired?: boolean; writeAccessories?: boolean; accessories?: Accessory[]; subcategory: string; image: string; note: string; paths: PathPair[] };
+export type Product = { id: string; code: string; name: string; mode: string; layoutType: LayoutType | ''; category: string; printRequired?: boolean; writeAccessories?: boolean; accessories?: Accessory[]; subcategory: string; image: string; imageKey?: string; note: string; paths: PathPair[] };
 export type Alias = { id: string; name: string; path: string };
 export type Shipment = { sku: string; quantity: number };
 export type ShipmentDetail = Shipment & { warehouse: string; shop: string; packageNo: string; customId?: string; orderNo?: string };
@@ -14,7 +14,7 @@ export type AppState = { products: Product[]; aliases: Alias[]; batches: Batch[]
 export const emptyState: AppState = { products: [], aliases: [], batches: [], productCategories: [], productModes: [], accessoryCatalog: [] };
 export const blankPath = (): PathValue => ({ kind: 'manual', value: '', aliasId: '' });
 export const blankSkuRule = (): SkuRule => ({ enabled: false, dropSegments: 0, append: '' });
-export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', printRequired: false, writeAccessories: false, accessories: [], subcategory: '', image: '', note: '', paths: [] });
+export const blankProduct = (code = ''): Product => ({ id: crypto.randomUUID(), code, name: '', mode: '', layoutType: '', category: '', printRequired: false, writeAccessories: false, accessories: [], subcategory: '', image: '', imageKey: '', note: '', paths: [] });
 export function normalizeState(input:AppState):AppState{
   const state=structuredClone(input),catalog=[...(state.accessoryCatalog??[])],byName=new Map(catalog.map(item=>[item.name.trim(),item]));
   state.products=state.products.map(product=>({...product,writeAccessories:Boolean(product.writeAccessories),accessories:(product.accessories??[]).map(item=>{
@@ -158,6 +158,7 @@ export function validateState(state: AppState): void {
       if(accessory.unit!==undefined&&!['','个','对','张','根'].includes(accessory.unit))throw new Error('配件单位只能选择个、对、张、根或不加单位');
     }
     if (p.image) { let u: URL; try { u = new URL(p.image); } catch { throw new Error('图片链接格式不正确'); } if (!['https:', 'http:'].includes(u.protocol)) throw new Error('图片须使用 http 或 https 链接'); }
+    textField(p.imageKey??'','本地商品图片',100,false);if(p.imageKey&&!/^[A-Za-z0-9_-]+$/.test(p.imageKey))throw new Error('本地商品图片标识格式无效');if(p.image&&p.imageKey)throw new Error('商品图片不能同时使用网络链接和本地上传');
     if (!Array.isArray(p.paths) || p.paths.length > 50) throw new Error('商品文件路径只能填写0至50组');
     for (const pair of p.paths) {
       for (const path of [pair.source, pair.target]) {

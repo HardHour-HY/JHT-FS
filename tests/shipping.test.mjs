@@ -82,3 +82,5 @@ test('bulk import allows custom-mode products without copy paths',()=>{const hea
 
 
 
+
+test('product image is optional and accepts either a network URL or local upload',()=>{validateState({...state,products:[{...p,image:'',imageKey:''}]});validateState({...state,products:[{...p,image:'https://example.com/product.jpg',imageKey:''}]});validateState({...state,products:[{...p,image:'',imageKey:'local_image_1'}]});assert.throws(()=>validateState({...state,products:[{...p,image:'https://example.com/product.jpg',imageKey:'local_image_1'}]}),/不能同时/);});
